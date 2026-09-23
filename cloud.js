@@ -38,6 +38,7 @@ async function save(){
 async function task(fn){if(busy)return;busy=true;controls();try{await fn();}catch(e){tell('Não foi possível concluir: '+e.message);}finally{busy=false;controls();}}
 async function sessionChanged(session){
   const id=session?.user?.id||null;if(id===owner)return;
+  document.body.classList.toggle('signed-out',!id);
   generation++;owner=id;ready=false;stamp=null;clear();$('calculator').hidden=true;$('account-controls').hidden=!id;$('login-form').hidden=!!id;$('account-user').textContent=session?.user?.email||'';controls();
   if(id){try{await load();}catch(e){tell('Falha ao carregar dados. Recarregue a página para tentar novamente: '+e.message);}controls();}
   else tell('Entre ou crie sua conta para salvar seus Pokémon online.');
