@@ -54,8 +54,7 @@
     if(state.disk){diskImage.src=diskImages[state.disk];diskImage.alt=diskNames[state.disk];}
     document.getElementById("disk-effect").textContent=state.disk?`Recupera 1s a cada ${state.disk}s dentro da ball.`:"Sem recuperação dentro da ball.";
     updateBox();
-    document.getElementById('elapsed').textContent = `${String(Math.floor(state.elapsed/60)).padStart(2,'0')}:${(state.elapsed%60).toFixed(1).padStart(4,'0')}`;
-    document.getElementById('active-label').textContent = `${state.team[state.active].name} fora da ball${paused?' · pausado':''}`;
+    document.getElementById('active-label').textContent = `${state.team[state.active].name} fora da ball`;
     [...team.children].forEach((card,i) => {
       const p = state.team[i], active = i === state.active;
       card.classList.toggle('active',active);
@@ -88,7 +87,7 @@
     });
   }
   function swap(index) { sync(); E.swap(state,index); update(); say(`${state.team[index].name} fora da ball`); }
-  function cast(index,move,elixir=0) { sync(); const ok=E.cast(state,index,move,Math.random,elixir); update(); if(ok) say(`${state.team[index].moves[move].name} usado`); return ok; }
+  function cast(index,move,elixir=0) { sync(); const ok=E.cast(state,index,move,Math.random,elixir); if(ok&&paused){paused=false;last=performance.now();} update(); if(ok) say(`${state.team[index].moves[move].name} usado`); return ok; }
   team.addEventListener('click',event=>{
     const button=event.target.closest('button[data-action]'); if(!button)return;
     const index=Number(button.closest('[data-index]').dataset.index);
@@ -112,19 +111,16 @@
   document.getElementById('global-disk').addEventListener('change',event=>{sync();state.disk=Number(event.target.value);update();say(state.disk?`Disco global: 1 segundo a cada ${state.disk} segundos, somente dentro da ball`:'Disco desativado');});
   document.getElementById('global-crit').addEventListener('input',event=>{sync();state.globalCrit=E.percent(event.target.value);if(Number(event.target.value)<0||Number(event.target.value)>100)event.target.value=state.globalCrit;update();});
   document.getElementById('global-atk').addEventListener('input',event=>{sync();state.globalAtk=Math.min(10000,Math.max(0,Number(event.target.value)||0));if(Number(event.target.value)<0||Number(event.target.value)>10000)event.target.value=state.globalAtk;update();});
-  document.getElementById('pause').onclick=()=>{sync();paused=!paused;document.getElementById('pause').textContent=paused?'Continuar':'Pausar';update();};
-  document.getElementById('skip').onclick=()=>{sync();E.advance(state,10);update();say('Avançou 10 segundos');};
-  document.getElementById('reset').onclick=()=>{sync();state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Todos os cooldowns estão prontos');};
   document.getElementById('new-box').onclick=()=>{sync();state.box=E.newBox();update();say('Nova box. Cooldowns mantidos.');};
-  document.getElementById('restart-box').onclick=()=>{sync();state.elapsed=0;state.box=E.newBox();state.team.forEach(p=>p.focusReady=false);state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Box e cooldowns reiniciados.');};
+  document.getElementById('restart-box').onclick=()=>{sync();paused=true;state.elapsed=0;state.box=E.newBox();state.team.forEach(p=>p.focusReady=false);state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Box e cooldowns reiniciados.');};
   document.getElementById('add').onclick=()=>{if(state.team.length>=12)return;sync();state.team.push(makePokemon(`Pokémon ${state.team.length+1}`));render();const card=team.lastElementChild;card.querySelector('details').open=true;card.querySelector('[data-field=name]').focus();};
   const boxGrid=document.getElementById('box-grid');
   let dummyId=0;
   boxGrid.innerHTML=Array.from({length:9},(_,slot)=>slot===4?'<div class="box-center"><span>FORA DA BALL</span><strong id="box-center"></strong></div>':`<div class="dummy" id="dummy-${dummyId}"><strong>Dummy ${dummyId+1}</strong><span class="dummy-hp"></span><progress max="${E.DUMMY_HP}" value="${E.DUMMY_HP}" aria-label="Vida do Dummy ${dummyId+1}"></progress><span class="dummy-hit"></span></div>${(dummyId++,'')}`).join('');
-  window.pokeSimulator={state,cast,swap,sync,isPaused:()=>paused,resume:()=>{sync();paused=false;document.getElementById('pause').textContent='Pausar';update();}};
+  window.pokeSimulator={state,cast,swap,sync,isPaused:()=>paused,resume:()=>{sync();paused=false;update();}};
 
   const cardsKey='poke-cards-v1';
-  const cardsStatus=text=>{document.getElementById('cards-status').textContent=text;};
+  const cardsStatus=text=>{document.getElementById('cards-status').textContent=text;document.getElementById('library-status').textContent=text;};
   function cardsSnapshot(){return {version:1,team:state.team.map(p=>({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))})),active:state.active,disk:state.disk,globalCrit:state.globalCrit,globalAtk:state.globalAtk||0};}
   function simplifyHeldSettings(p){
     const copy={...p};
@@ -151,7 +147,7 @@
   }
   function restoreCards(data){
     validateCards(data);
-    paused=true;state.elapsed=0;last=performance.now();document.getElementById("pause").textContent="Continuar";
+    paused=true;state.elapsed=0;last=performance.now();
     state.team=data.team.map(simplifyHeldSettings).map(p=>({...p,focusReady:false,atk:p.atk||0,heldMode:'percent',moves:p.moves.map(m=>({...m,remaining:0,total:0}))}));
     state.active=Number.isInteger(data.active)&&data.active>=0&&data.active<state.team.length?data.active:0;
     state.disk=data.disk;state.globalCrit=data.globalCrit;state.globalAtk=data.globalAtk||0;
@@ -228,7 +224,7 @@
     if(state.team.length>=12){cardsStatus('Limite de 12 Pokémon. Remova um card antes de carregar outro.');return;}
     try{
       const p=library[Number(selected)];validateCards({...cardsSnapshot(),team:[p]});
-      state.team.push({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))});render();cardsStatus(p.name+' carregado como um novo card.');
+      state.team.push({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))});render();document.querySelector('[data-panel="pokemon"]').click();cardsStatus(p.name+' carregado como um novo card.');
     }catch{cardsStatus('Este Pokémon salvo possui dados inválidos.');}
   };
   renderLibrary();

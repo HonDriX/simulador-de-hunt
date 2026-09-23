@@ -31,3 +31,5 @@
 
 #import-diagnostics{margin:12px 0;border:1px solid var(--line);border-radius:7px}#import-diagnostic-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.8rem;color:var(--muted);padding:0 16px 14px;margin:0;line-height:1.6}
 
+
+#panel-library .actions{justify-content:flex-start;align-items:end}#panel-library label{min-width:220px;flex:1;max-width:420px}@media(max-width:760px){.panel-nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
