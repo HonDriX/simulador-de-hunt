@@ -1,18 +1,10 @@
 (function (root) {
   const DUMMY_HP = 398769.5;
   const effective = (base, held, mode) => Math.max(0, mode === 'seconds' ? base - held : base * (1 - held / 100));
-  const heldChoices = ['none', 'atk', 'cooldown'];
-  const heldChoice = p => heldChoices.includes(p.heldChoice) ? p.heldChoice : Number(p.held) > 0 ? 'cooldown' : Number(p.atk) > 0 ? 'atk' : 'none';
-  const activeAttackBonus = p => heldChoice(p) === 'atk' ? Math.max(0, Number(p.atk) || 0) : 0;
-  const activeCooldownBonus = p => heldChoice(p) === 'cooldown' ? Math.max(0, Number(p.held) || 0) : 0;
+  const activeCooldownBonus = p => Math.max(0, Number(p.held) || 0);
+  const activeAttackBonus = p => Math.max(0, Number(p.atk) || 0);
   const moveCooldown = (p, m) => effective(m.base, activeCooldownBonus(p), p.heldMode);
-  const baseDamagePerHit = (p, m) => (Number(m.damagePerHit) || 0) / (p.damageMeasuredWithAtk8 === true ? 1.31 : 1);
-  function setHeldChoice(p, choice) {
-    if (!heldChoices.includes(choice)) throw new Error('Held inválido');
-    p.heldChoice = choice;
-    if (choice === 'atk' && !p.atk) p.atk = 31;
-    if (choice === 'cooldown' && !p.held) p.held = 17;
-  }
+  const baseDamagePerHit = (p, m) => (Number(m.damagePerHit) || 0) / (activeCooldownBonus(p) > 0 ? 1.31 : 1);
   function advance(state, seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Tempo inválido');
     state.elapsed += seconds;
@@ -76,7 +68,7 @@
   function newBox() {
     return { maxHp: DUMMY_HP, targets: Array.from({length:8}, (_,id) => ({id,hp:DUMMY_HP,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
   }
-  const api = { DUMMY_HP, effective, heldChoice, activeAttackBonus, activeCooldownBonus, moveCooldown, baseDamagePerHit, setHeldChoice, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
+  const api = { DUMMY_HP, effective, activeAttackBonus, activeCooldownBonus, moveCooldown, baseDamagePerHit, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
   if (typeof module !== 'undefined') module.exports = api;
   else root.CooldownEngine = api;
 })(globalThis);

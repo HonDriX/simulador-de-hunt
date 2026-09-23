@@ -31,4 +31,3 @@
 
 #import-diagnostics{margin:12px 0;border:1px solid var(--line);border-radius:7px}#import-diagnostic-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.8rem;color:var(--muted);padding:0 16px 14px;margin:0;line-height:1.6}
 
-.damage-source-check{display:flex;align-items:center;gap:8px;line-height:1.4}.damage-source-check input{width:17px;height:17px;min-height:0;margin:0;padding:0;flex-shrink:0;accent-color:var(--lime)}.equipment-inputs input:disabled{opacity:.45;cursor:not-allowed}
