@@ -25,3 +25,6 @@
 #guest-entry{margin-top:10px;width:100%;text-align:center;border-color:var(--lime);color:var(--lime);background:transparent}
 
 .move-fields legend{display:flex;align-items:center;gap:16px}.move-fields .focus-option{display:inline-flex;align-items:center;gap:6px;font-size:.85rem}.focus-option input{width:auto;margin:0}.move-fields input:disabled{opacity:.45;cursor:not-allowed}
+
+/* Align card name and actions, with a separate action row on narrow cards. */
+.pokemon{container-type:inline-size}.settings-heading{display:grid;grid-template-columns:minmax(120px,1fr) auto auto;align-items:end;gap:10px}.settings-heading label{min-width:0}.settings-heading button,.settings-heading input{height:42px;min-height:42px}.settings-heading button{font-size:.85rem;white-space:nowrap;align-self:end}@container(max-width:480px){.settings-heading{grid-template-columns:1fr 1fr}.settings-heading label{grid-column:1/-1}.settings-heading button{width:100%}}
