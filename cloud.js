@@ -6,12 +6,13 @@ const localKey="hondrix-guest-backup-v1";
 let lastLocal="";
 const tell=text=>{$('account-status').textContent=text;};
 const importStatus=text=>{tell(text);$('cards-status').textContent=text;};
-function controls(){for(const id of ['cloud-save','cloud-load','cloud-import','cloud-export'])$(id).disabled=busy||!ready;}
+function controls(){for(const id of ['cloud-save','cloud-load','cloud-import','cloud-export','import-cards'])$(id).disabled=busy||!ready;}
 function snapshot(){return {version:1,cards:pokeCards.snapshot(),library:pokeCards.library(),combos:pokeCombos.snapshot(),automation:{sequence:$('auto-sequence').value,delay:Number($('auto-delay').value),repeat:$('auto-repeat').checked}};}
 function normalize(data){
   if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Backup inválido.');
   const p=data.cards?data:{version:1,cards:data,library:data.team||[],combos:Array(6).fill(null),automation:data.automation||{sequence:'poke 1 cds 1 a 6',delay:0.5,repeat:false}};
-  pokeCards.validate(p.cards);pokeCards.validateLibrary(p.library);
+  try{pokeCards.validate(p.cards);}catch(e){throw Error('Time: '+e.message);}
+  try{pokeCards.validateLibrary(p.library);}catch(e){throw Error('Biblioteca: '+e.message);}
   const validSequence=c=>c&&typeof c.sequence==='string'&&c.sequence.length<=20000&&Number.isFinite(c.delay)&&c.delay>=0.1&&c.delay<=60&&typeof c.repeat==='boolean';
   if(!Array.isArray(p.combos)||p.combos.length!==6||p.combos.some(c=>c!==null&&!validSequence(c))||!validSequence(p.automation))throw Error('Combos ou sequência inválidos.');
   if(new TextEncoder().encode(JSON.stringify(p)).length>900000)throw Error('Backup muito grande.');
@@ -98,7 +99,47 @@ async function importData(data){
  else importStatus(message+' Clique em Salvar alterações para guardar na conta.');
 }
 window.pokeBackup={importData};
-$('cloud-file').onchange=$('cards-file').onchange=event=>{const file=event.target.files[0];event.target.value='';if(!file)return;const gen=generation;return task(async()=>{try{if(file.size>1000000)throw Error('Arquivo muito grande.');const data=JSON.parse(await file.text());if(gen!==generation)throw Error('A conta mudou durante a importação. Tente novamente.');await importData(data);}catch(e){importStatus('Falha ao importar: '+e.message);}});};
+function describeBackup(data){
+ const type=value=>value===null?'nulo':Array.isArray(value)?'lista':typeof value==='object'?'objeto':typeof value==='string'?'texto':typeof value==='number'?'número':typeof value==='undefined'?'ausente':typeof value;
+ if(!data||typeof data!=='object'||Array.isArray(data))return 'Formato: JSON do tipo '+type(data)+' (esperado: objeto de backup).';
+ const full=Object.prototype.hasOwnProperty.call(data,'cards');
+ const cards=full?data.cards:data;
+ const count=value=>Array.isArray(value)?value.length+' itens':type(value);
+ return ['Formato: '+(full?'backup completo':Array.isArray(data.team)?'backup de cards':'JSON sem cards/team reconhecidos'),
+ 'Time: '+count(cards?.team),full?'Biblioteca: '+count(data.library):'Biblioteca: será criada com o time',
+ full?'Combos: '+count(data.combos):'Combos: ausentes neste formato'].join('\n');
+}
+function importDetails(lines,failed=false){
+ $('import-diagnostics').hidden=false;$('import-diagnostics').open=failed;
+ $('import-diagnostic-text').textContent=lines.join('\n');
+}
+$('cloud-file').onchange=$('cards-file').onchange=event=>{
+ const file=event.target.files[0];event.target.value='';if(!file)return;
+ const gen=generation,lines=['Versão: import3','Arquivo: '+file.name,'Tamanho: '+file.size+' bytes','Origem: '+(event.target.id==='cloud-file'?'Conta e backups':'Seu time')];
+ if(busy){importStatus('Aguarde a operação atual terminar e selecione o arquivo novamente.');importDetails([...lines,'Resultado: importação não iniciada (outra operação em andamento).'],true);return;}
+ return task(async()=>{
+  let stage='leitura do arquivo';
+  try{
+   importDetails([...lines,'Lendo arquivo…']);
+   if(file.size>1000000)throw Error('O arquivo excede o limite de 1 MB.');
+   const text=await file.text();
+   if(globalThis.crypto?.subtle){try{const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));lines.push('Identificador do conteúdo: '+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').slice(0,16));}catch{}}
+   stage='leitura do JSON';
+   let data;try{data=JSON.parse(text.replace(/^\uFEFF/,''));}catch{throw Error(text.trim()?'O arquivo não contém JSON válido.':'O arquivo está vazio.');}
+   lines.push(describeBackup(data));
+   stage='validação do backup';
+   const normalized=normalize(data);
+   if(gen!==generation)throw Error('A conta mudou durante a importação. Selecione o arquivo novamente.');
+   stage='restauração dos dados';
+   await importData(normalized);
+   importDetails([...lines,'Resultado: importado com sucesso.']);
+  }catch(e){
+   importStatus('Falha ao importar: '+e.message+' Veja os detalhes abaixo dos botões de backup.');
+   document.querySelector('[data-panel="pokemon"]').click();
+   importDetails([...lines,'Etapa: '+stage,'Resultado: '+e.message],true);
+  }
+ });
+};
 $('cloud-export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='hondrix-backup-completo.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('signout').onclick=()=>task(async()=>{if(guest){saveLocal();guest=false;ready=false;generation++;clear();document.body.classList.add('signed-out');$('calculator').hidden=true;$('account-controls').hidden=true;$('login-form').hidden=false;modeLabels();tell('Entre para usar seus dados online. A cópia local foi preservada.');return;}const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;await sessionChanged(null);});
 client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')$('recovery-form').hidden=false;setTimeout(()=>sessionChanged(session),0);});

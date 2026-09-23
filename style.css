@@ -28,3 +28,5 @@
 
 /* Align card name and actions, with a separate action row on narrow cards. */
 .pokemon{container-type:inline-size}.settings-heading{display:grid;grid-template-columns:minmax(120px,1fr) auto auto;align-items:end;gap:10px}.settings-heading label{min-width:0}.settings-heading button,.settings-heading input{height:42px;min-height:42px}.settings-heading button{font-size:.85rem;white-space:nowrap;align-self:end}@container(max-width:480px){.settings-heading{grid-template-columns:1fr 1fr}.settings-heading label{grid-column:1/-1}.settings-heading button{width:100%}}
+
+#import-diagnostics{margin:12px 0;border:1px solid var(--line);border-radius:7px}#import-diagnostic-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:.8rem;color:var(--muted);padding:0 16px 14px;margin:0;line-height:1.6}

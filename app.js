@@ -126,7 +126,9 @@
   function cardsSnapshot(){return {version:1,team:state.team.map(p=>({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))})),active:state.active,disk:state.disk,globalCrit:state.globalCrit,globalAtk:state.globalAtk||0};}
   function validateCards(data){
     const num=(v,max)=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=max;
-    if(!data||!Array.isArray(data.team)||data.team.length<1||data.team.length>12)throw Error('Backup de cards inválido.');
+    if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Os cards precisam estar em um objeto.');
+    if(!Array.isArray(data.team))throw Error('O campo team está ausente ou não é uma lista.');
+    if(data.team.length<1||data.team.length>12)throw Error('O time tem '+data.team.length+' Pokémon; o limite é de 1 a 12.');
     for(const p of data.team){
       if(!p||typeof p.name!=='string'||!num(p.held,100)||!num(p.heldCrit,100)||!num(p.atk||0,10000)||![null,undefined,'blaziken','salad'].includes(p.food)||!Array.isArray(p.moves)||p.moves.length!==6)throw Error('Configuração de Pokémon inválida.');
       for(const m of p.moves)if(!m||(m.focus!==undefined&&typeof m.focus!=='boolean')||typeof m.name!=='string'||!num(m.base,86400)||!num(m.damagePerHit,1e9)||!Number.isInteger(m.hits)||m.hits<1||m.hits>10000)throw Error('Configuração de golpe inválida.');
