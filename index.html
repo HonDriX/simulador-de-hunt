@@ -7,7 +7,7 @@
   <meta name="description" content="Simule seis cooldowns por Pokémon, troque quem fica fora da ball e compare discos e helds.">
   <title>Simulador de hunt</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23131923'/%3E%3Ccircle cx='16' cy='17' r='10' fill='none' stroke='%23bcf36a' stroke-width='3'/%3E%3Cpath d='M16 10v7l4 2M12 3h8' stroke='%23bcf36a' stroke-width='3' fill='none'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=guest2">
+  <link rel="stylesheet" href="style.css?v=focus1">
 </head>
 <body class="signed-out">
 <main class="app-layout"><aside class="app-sidebar"><div class="sidebar-brand">HonDriX<span>SIMULADOR DE HUNT</span></div><nav class="panel-nav" aria-label="Painéis da calculadora"><button data-panel="combos">Configurar combos</button><button data-panel="pokemon">Configurar Pokémon</button><button data-panel="box" aria-current="page">Box de treino</button></nav><section class="automation-section" id="account-panel"><div class="login-intro"><div class="eyebrow">PLANEJE SUA PRÓXIMA HUNT</div><h1>Simulador de hunt</h1><p>Configure seus Pokémon, monte combos e teste o dano em uma box de oito alvos. Compare cooldowns, críticos e bônus para encontrar a melhor sequência.</p><p class="login-save-note">Use sem conta e salve neste navegador, ou entre para acessar seus cards e combos em qualquer dispositivo.</p></div><h2 class="account-title">Minha conta</h2>
@@ -36,5 +36,5 @@ poke 3 cds 1 a 6</textarea></label></details>
 </section>  <footer><strong>Como o tempo é calculado</strong><p>O disco é global e atua em todos os Pokémon dentro da ball: recupera 1s a cada 8, 6, 4 ou 3s, de forma proporcional e contínua. Fora da ball, o disco não se aplica: a recuperação é sempre de 1s por segundo. Sem disco, o cooldown fica parado dentro da ball.</p><p>O held reduz o cooldown total antes de usar o golpe. Alterações no held ou no tempo base valem no próximo uso. A previsão “pronto em” considera que o Pokémon permanece onde está.</p></footer>
   <div id="announcement" role="status" class="sr-only"></div>
 </div></main>
-<script src="engine.js"></script><script src="app.js"></script><script src="automation.js"></script>
+<script src="engine.js?v=focus1"></script><script src="app.js?v=focus1"></script><script src="automation.js"></script>
 <script src="panels.js"></script><script src="builder.js"></script><script type="module" src="cloud.js?v=guest2"></script></body></html>

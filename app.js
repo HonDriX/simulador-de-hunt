@@ -21,7 +21,7 @@
         <div class="equipment-inputs"><label>Redução de cooldown do held (%)<input data-field="held" type="number" min="0" max="100" step="0.1" value="${p.held}"></label><label>Chance de crítico do held (%)<input data-field="heldCrit" type="number" min="0" max="100" step="0.1" value="${p.heldCrit}"></label><label>ATK (%)<input data-field="atk" type="number" min="0" max="10000" step="0.1" value="${p.atk||0}"></label></div>
         <p class="setting-note">ATK soma com o ATK global e com os 3% da Blaziken Food.</p>
         <p class="setting-note crit-detail"></p>
-        <div class="move-config">${p.moves.map((m,j)=>`<fieldset class="move-fields"><legend>Golpe ${j+1}</legend><label>Nome<input aria-label="Nome do golpe ${j+1}" data-field="moveName" data-move="${j}" maxlength="24" value="${escape(m.name)}"></label><label>Cooldown base (s)<input aria-label="Cooldown base do golpe ${j+1} em segundos" type="number" min="0" max="86400" step="0.1" data-field="base" data-move="${j}" value="${m.base}"></label><label>Dano por hit<input aria-label="Dano por hit do golpe ${j+1}" type="number" min="0" max="1000000000" step="0.1" data-field="damagePerHit" data-move="${j}" value="${m.damagePerHit}"></label><label>Número de hits<input aria-label="Número de hits do golpe ${j+1}" type="number" min="1" max="10000" step="1" data-field="hits" data-move="${j}" value="${m.hits}"></label><output class="damage-summary" data-summary="${j}"></output></fieldset>`).join('')}</div>
+        <div class="move-config">${p.moves.map((m,j)=>`<fieldset class="move-fields"><legend>Golpe ${j+1} <label class="focus-option"><input type="checkbox" data-field="focus" data-move="${j}" ${m.focus===true?'checked':''}> Focus</label></legend><label>Nome<input aria-label="Nome do golpe ${j+1}" data-field="moveName" data-move="${j}" maxlength="24" value="${escape(m.name)}"></label><label>Cooldown base (s)<input aria-label="Cooldown base do golpe ${j+1} em segundos" type="number" min="0" max="86400" step="0.1" data-field="base" data-move="${j}" value="${m.base}"></label><label>Dano por hit<input aria-label="Dano por hit do golpe ${j+1}" type="number" min="0" max="1000000000" step="0.1" data-field="damagePerHit" data-move="${j}" value="${m.damagePerHit}"></label><label>Número de hits<input aria-label="Número de hits do golpe ${j+1}" type="number" min="1" max="10000" step="1" data-field="hits" data-move="${j}" value="${m.hits}"></label><output class="damage-summary" data-summary="${j}"></output></fieldset>`).join('')}</div>
         <p class="setting-note">Os tempos iniciais são exemplos. Configure os valores do seu jogo. Mudanças no held e no cooldown base valem no próximo uso.</p>
       </div></details></article>`).join('');
     document.getElementById('count').textContent = String(state.team.length).padStart(2,'0');
@@ -74,10 +74,11 @@
         const m=p.moves[j], ready=m.remaining<=0.000001, rate=active?1:state.disk?1/state.disk:0;
         button.disabled=!active || !ready;
         button.classList.toggle('ready',ready);
-        button.querySelector('.move-title').textContent=m.name;
+        button.querySelector('.move-title').textContent=m.name+(m.focus?' · Focus':p.focusReady?' · ×1,5':'');
+        card.querySelectorAll(`[data-move="${j}"][data-field="damagePerHit"], [data-move="${j}"][data-field="hits"]`).forEach(input=>input.disabled=m.focus===true);
         button.querySelector('.move-value').textContent=ready?'Pronto':`${fmt(m.remaining)}s`;
         const total=E.effective(m.base,p.held,p.heldMode);
-        card.querySelector(`[data-summary="${j}"]`).textContent=`Dano total sem crítico: ${(m.damagePerHit*m.hits*E.attackMultiplier(p, state)*2).toLocaleString('pt-BR', {maximumFractionDigits:2})} por alvo (super efetivo ×2; ATK +${Number(((E.attackMultiplier(p, state)-1)*100).toFixed(2))}%${p.food==='blaziken'?', inclui food':''})`;
+        card.querySelector(`[data-summary="${j}"]`).textContent=m.focus?'Focus: próximo golpe deste Pokémon causa ×1,5 de dano em todos os hits, antes do crítico.':`Dano total sem crítico: ${(m.damagePerHit*m.hits*E.attackMultiplier(p, state)*2).toLocaleString('pt-BR', {maximumFractionDigits:2})} por alvo (super efetivo ×2; ATK +${Number(((E.attackMultiplier(p, state)-1)*100).toFixed(2))}%${p.food==='blaziken'?', inclui food':''})`;
         button.querySelector('.move-meta').textContent=ready?`${fmt(total)}s total`:rate?`pronto em ${fmt(m.remaining/rate)}s`:'parado na ball';
         button.querySelector('.fill').style.width=`${ready?100:Math.max(0,100*(1-m.remaining/(m.total||1)))}%`;
         button.setAttribute('aria-label',`${p.name}, ${m.name}: ${ready?`pronto, cooldown ${fmt(total)} segundos${active?', usar golpe':', tire da ball para usar'}`:`${fmt(m.remaining)} segundos de cooldown restantes`}`);
@@ -98,6 +99,7 @@
     const p=state.team[Number(input.closest('[data-index]').dataset.index)],j=Number(input.dataset.move);
     if(field==='name')p.name=input.value||'Pokémon';
     if(field==='moveName')p.moves[j].name=input.value||`Golpe ${j+1}`;
+    if(field==='focus')p.moves[j].focus=input.checked;
     if(field==='food')p.food=input.checked?input.value:null;
     if(field==='heldCrit'){p.heldCrit=E.percent(input.value);if(Number(input.value)<0||Number(input.value)>100)input.value=p.heldCrit;}
     if(field==='atk'){p.atk=Math.min(10000,Math.max(0,Number(input.value)||0));if(Number(input.value)<0||Number(input.value)>10000)input.value=p.atk;}
@@ -112,7 +114,7 @@
   document.getElementById('skip').onclick=()=>{sync();E.advance(state,10);update();say('Avançou 10 segundos');};
   document.getElementById('reset').onclick=()=>{sync();state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Todos os cooldowns estão prontos');};
   document.getElementById('new-box').onclick=()=>{sync();state.box=E.newBox();update();say('Nova box. Cooldowns mantidos.');};
-  document.getElementById('restart-box').onclick=()=>{sync();state.elapsed=0;state.box=E.newBox();state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Box e cooldowns reiniciados.');};
+  document.getElementById('restart-box').onclick=()=>{sync();state.elapsed=0;state.box=E.newBox();state.team.forEach(p=>p.focusReady=false);state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Box e cooldowns reiniciados.');};
   document.getElementById('add').onclick=()=>{if(state.team.length>=12)return;sync();state.team.push(makePokemon(`Pokémon ${state.team.length+1}`));render();const card=team.lastElementChild;card.querySelector('details').open=true;card.querySelector('[data-field=name]').focus();};
   const boxGrid=document.getElementById('box-grid');
   let dummyId=0;
@@ -121,13 +123,13 @@
 
   const cardsKey='poke-cards-v1';
   const cardsStatus=text=>{document.getElementById('cards-status').textContent=text;};
-  function cardsSnapshot(){return {version:1,team:state.team.map(p=>({...p,moves:p.moves.map(m=>({...m,remaining:0,total:0}))})),active:state.active,disk:state.disk,globalCrit:state.globalCrit,globalAtk:state.globalAtk||0};}
+  function cardsSnapshot(){return {version:1,team:state.team.map(p=>({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))})),active:state.active,disk:state.disk,globalCrit:state.globalCrit,globalAtk:state.globalAtk||0};}
   function validateCards(data){
     const num=(v,max)=>typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=max;
     if(!data||!Array.isArray(data.team)||data.team.length<1||data.team.length>12)throw Error('Backup de cards inválido.');
     for(const p of data.team){
       if(!p||typeof p.name!=='string'||!num(p.held,100)||!num(p.heldCrit,100)||!num(p.atk||0,10000)||![null,undefined,'blaziken','salad'].includes(p.food)||!Array.isArray(p.moves)||p.moves.length!==6)throw Error('Configuração de Pokémon inválida.');
-      for(const m of p.moves)if(!m||typeof m.name!=='string'||!num(m.base,86400)||!num(m.damagePerHit,1e9)||!Number.isInteger(m.hits)||m.hits<1||m.hits>10000)throw Error('Configuração de golpe inválida.');
+      for(const m of p.moves)if(!m||(m.focus!==undefined&&typeof m.focus!=='boolean')||typeof m.name!=='string'||!num(m.base,86400)||!num(m.damagePerHit,1e9)||!Number.isInteger(m.hits)||m.hits<1||m.hits>10000)throw Error('Configuração de golpe inválida.');
     }
     if(![0,3,4,6,8].includes(data.disk)||!num(data.globalCrit,100)||!num(data.globalAtk||0,10000))throw Error('Configuração global inválida.');
     return data;
@@ -135,7 +137,7 @@
   function restoreCards(data){
     validateCards(data);
     paused=true;state.elapsed=0;last=performance.now();document.getElementById("pause").textContent="Continuar";
-    state.team=data.team.map(p=>({...p,atk:p.atk||0,heldMode:'percent',moves:p.moves.map(m=>({...m,remaining:0,total:0}))}));
+    state.team=data.team.map(p=>({...p,focusReady:false,atk:p.atk||0,heldMode:'percent',moves:p.moves.map(m=>({...m,remaining:0,total:0}))}));
     state.active=Number.isInteger(data.active)&&data.active>=0&&data.active<state.team.length?data.active:0;
     state.disk=data.disk;state.globalCrit=data.globalCrit;state.globalAtk=data.globalAtk||0;
     state.box=E.newBox();
@@ -184,7 +186,7 @@
     if(state.team.length>=12){cardsStatus('Limite de 12 Pokémon. Remova um card antes de carregar outro.');return;}
     try{
       const p=library[Number(selected)];validateCards({...cardsSnapshot(),team:[p]});
-      state.team.push({...p,moves:p.moves.map(m=>({...m,remaining:0,total:0}))});render();cardsStatus(p.name+' carregado como um novo card.');
+      state.team.push({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))});render();cardsStatus(p.name+' carregado como um novo card.');
     }catch{cardsStatus('Este Pokémon salvo possui dados inválidos.');}
   };
   renderLibrary();

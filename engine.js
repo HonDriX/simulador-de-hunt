@@ -13,9 +13,12 @@
     if (!m || pokemon !== state.active || m.remaining > 0.000001) return false;
     m.total = effective(m.base, p.held, p.heldMode);
     m.remaining = m.total;
+    if (m.focus === true) { p.focusReady = true; return true; }
+    const focusMultiplier = p.focusReady ? 1.5 : 1;
+    p.focusReady = false;
     if (state.box && state.box.finishedAt === null) {
       const box = state.box;
-      const damage = (m.damagePerHit || 0) * attackMultiplier(p, state) * 2 * (1 + Math.max(0, Number(elixir) || 0) / 100);
+      const damage = (m.damagePerHit || 0) * focusMultiplier * attackMultiplier(p, state) * 2 * (1 + Math.max(0, Number(elixir) || 0) / 100);
       if (damage > 0) {
         if (box.startedAt === null) box.startedAt = state.elapsed;
         box.casts++;
