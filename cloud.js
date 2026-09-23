@@ -6,11 +6,13 @@ const tell=text=>{$('account-status').textContent=text;};
 function controls(){for(const id of ['cloud-save','cloud-load','cloud-import','cloud-export'])$(id).disabled=busy||!ready;}
 function snapshot(){return {version:1,cards:pokeCards.snapshot(),library:pokeCards.library(),combos:pokeCombos.snapshot(),automation:{sequence:$('auto-sequence').value,delay:Number($('auto-delay').value),repeat:$('auto-repeat').checked}};}
 function normalize(data){
+  if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Backup inválido.');
   const p=data.cards?data:{version:1,cards:data,library:data.team||[],combos:Array(6).fill(null),automation:data.automation||{sequence:'poke 1 cds 1 a 6',delay:0.5,repeat:false}};
   pokeCards.validate(p.cards);pokeCards.validateLibrary(p.library);
   const validSequence=c=>c&&typeof c.sequence==='string'&&c.sequence.length<=20000&&Number.isFinite(c.delay)&&c.delay>=0.1&&c.delay<=60&&typeof c.repeat==='boolean';
   if(!Array.isArray(p.combos)||p.combos.length!==6||p.combos.some(c=>c!==null&&!validSequence(c))||!validSequence(p.automation))throw Error('Combos ou sequência inválidos.');
   if(new TextEncoder().encode(JSON.stringify(p)).length>900000)throw Error('Backup muito grande.');
+  p.cards.globalAtk=p.cards.globalAtk||0;
   return p;
 }
 function apply(p){normalize(p);pokeCombos.stop();pokeCards.restore(p.cards,p.library);pokeCombos.restore(p.combos);$('auto-sequence').value=p.automation.sequence;$('auto-delay').value=p.automation.delay;$('auto-repeat').checked=p.automation.repeat;}
@@ -39,7 +41,7 @@ async function task(fn){if(busy)return;busy=true;controls();try{await fn();}catc
 async function sessionChanged(session){
   const id=session?.user?.id||null;if(id===owner)return;
   document.body.classList.toggle('signed-out',!id);
-  generation++;owner=id;ready=false;stamp=null;clear();$('calculator').hidden=true;$('account-controls').hidden=!id;$('login-form').hidden=!!id;$('account-user').textContent=session?.user?.email||'';controls();
+  generation++;owner=id;ready=false;stamp=null;clear();$('account-password').value='';$('new-password').value='';$('calculator').hidden=true;$('account-controls').hidden=!id;$('login-form').hidden=!!id;$('account-user').textContent=session?.user?.email||'';controls();
   if(id){try{await load();}catch(e){tell('Falha ao carregar dados. Recarregue a página para tentar novamente: '+e.message);}controls();}
   else tell('Entre ou crie sua conta para salvar seus Pokémon online.');
 }

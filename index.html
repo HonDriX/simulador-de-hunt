@@ -1,11 +1,13 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://wiki.pokexgames.com; connect-src 'self' https://zzetsupxfwwcevfknpex.supabase.co wss://zzetsupxfwwcevfknpex.supabase.co https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="no-referrer">
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Simule seis cooldowns por Pokémon, troque quem fica fora da ball e compare discos e helds.">
   <title>Simulador de hunt</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23131923'/%3E%3Ccircle cx='16' cy='17' r='10' fill='none' stroke='%23bcf36a' stroke-width='3'/%3E%3Cpath d='M16 10v7l4 2M12 3h8' stroke='%23bcf36a' stroke-width='3' fill='none'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css?v=login2">
+  <link rel="stylesheet" href="style.css?v=security1">
 </head>
 <body class="signed-out">
 <main class="app-layout"><aside class="app-sidebar"><div class="sidebar-brand">HonDriX<span>SIMULADOR DE HUNT</span></div><nav class="panel-nav" aria-label="Painéis da calculadora"><button data-panel="combos">Configurar combos</button><button data-panel="pokemon">Configurar Pokémon</button><button data-panel="box" aria-current="page">Box de treino</button></nav><section class="automation-section" id="account-panel"><div class="login-intro"><div class="eyebrow">PLANEJE SUA PRÓXIMA HUNT</div><h1>Simulador de hunt</h1><p>Configure seus Pokémon, monte combos e teste o dano em uma box de oito alvos. Compare cooldowns, críticos e bônus para encontrar a melhor sequência.</p><p class="login-save-note">Entre para salvar seu time e seus combos e acessá-los em qualquer dispositivo.</p></div><h2 class="account-title">Minha conta</h2>
@@ -35,4 +37,4 @@ poke 3 cds 1 a 6</textarea></label></details>
   <div id="announcement" role="status" class="sr-only"></div>
 </div></main>
 <script src="engine.js"></script><script src="app.js"></script><script src="automation.js"></script>
-<script src="panels.js"></script><script src="builder.js"></script><script type="module" src="cloud.js?v=login2"></script></body></html>
+<script src="panels.js"></script><script src="builder.js"></script><script type="module" src="cloud.js?v=security1"></script></body></html>
