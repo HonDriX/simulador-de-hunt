@@ -4,6 +4,31 @@ const $=id=>document.getElementById(id);
 let owner=null,stamp=null,ready=false,generation=0,busy=false,guest=false;
 const localKey="hondrix-guest-backup-v1";
 let lastLocal="";
+let accountBaseline='',lastAccountSeen='',pendingAccountDraft=null;
+const accountDraftKey=id=>'hondrix-account-draft-v1:'+id;
+function readAccountDraft(id){
+ const raw=localStorage.getItem(accountDraftKey(id));if(!raw)return null;
+ try{const draft=JSON.parse(raw);if(draft.owner!==id||draft.version!==1)throw Error('Rascunho de outra conta ou formato inválido.');normalize(draft.payload);return draft;}
+ catch(e){return {error:e.message};}
+}
+function draftStatus(){
+ $('restore-account-draft').hidden=!owner||!pendingAccountDraft;
+ $('draft-status').textContent=!owner||!ready?'':pendingAccountDraft?'Há um rascunho local preservado. Use Restaurar rascunho local para recuperá-lo.':lastAccountSeen!==accountBaseline?'Alterações preservadas neste navegador. Use Salvar alterações para enviar à conta.':'';
+}
+function persistAccountDraft(){
+ if(!owner||!ready||pendingAccountDraft)return;
+ const payload=normalize(snapshot()),value=JSON.stringify(payload);
+ if(value===lastAccountSeen)return;
+ if(value===accountBaseline)localStorage.removeItem(accountDraftKey(owner));
+ else localStorage.setItem(accountDraftKey(owner),JSON.stringify({version:1,owner,baseStamp:stamp,savedAt:new Date().toISOString(),payload}));
+ lastAccountSeen=value;draftStatus();
+}
+function preserveCurrent(){
+ if(!ready)return;
+ try{if(guest){saveLocal();}else persistAccountDraft();}
+ catch(e){$('draft-status').textContent='Falha ao guardar cópia local. Exporte um backup: '+e.message;}
+}
+
 const tell=text=>{$('account-status').textContent=text;};
 const importStatus=text=>{tell(text);$('cards-status').textContent=text;};
 function controls(){for(const id of ['cloud-save','cloud-load','cloud-import','cloud-export','import-cards'])$(id).disabled=busy||!ready;}
@@ -23,14 +48,15 @@ function apply(p){normalize(p);pokeCombos.stop();pokeCards.restore(p.cards,p.lib
 function clear(){pokeCombos.stop();pokeCards.reset();pokeCombos.restore(Array(6).fill(null));$('auto-sequence').value='poke 1 cds 1 a 6';$('auto-delay').value=0.5;$('auto-repeat').checked=false;}
 async function load(migrateLocal=false){
   if(guest){const raw=localStorage.getItem(localKey);if(raw){apply(normalize(JSON.parse(raw)));lastLocal=JSON.stringify(snapshot());tell('Backup local carregado.');}else tell('Ainda não há backup neste navegador.');return;}
-  const id=owner,gen=generation;
+  if(ready)persistAccountDraft();
+  const id=owner,gen=generation,draft=readAccountDraft(owner);
   const {data,error}=await client.from('pokemon_saves').select('payload,updated_at').eq('user_id',id).maybeSingle();
   if(gen!==generation)return;
   if(error)throw error;
   if(data){apply(normalize(data.payload));stamp=data.updated_at;tell('Seus dados foram carregados da conta.');}
   else{
     stamp=null;
-    const raw=migrateLocal?localStorage.getItem(localKey):null;
+    const raw=migrateLocal&&!draft?localStorage.getItem(localKey):null;
     if(raw){
       apply(normalize(JSON.parse(raw)));ready=true;$('calculator').hidden=false;
       try{await save();tell('Seus cards e combos locais foram salvos automaticamente na conta.');}
@@ -38,6 +64,14 @@ async function load(migrateLocal=false){
     }else{clear();tell('Nenhum backup na conta ainda.');}
   }
   ready=true;$('calculator').hidden=false;
+  accountBaseline=JSON.stringify(snapshot());lastAccountSeen=accountBaseline;pendingAccountDraft=null;
+  if(draft){
+    if(migrateLocal&&!draft.error&&draft.baseStamp===stamp){
+      apply(normalize(draft.payload));lastAccountSeen=JSON.stringify(snapshot());
+      tell('Rascunho deste navegador recuperado. Use Salvar alterações para enviar à conta.');
+    }else pendingAccountDraft=draft;
+  }
+  draftStatus();
 }
 async function save(){
   if(guest){saveLocal();tell('Cards e combos salvos neste navegador. Exporte um backup para levar a outro computador.');return;}
@@ -49,16 +83,18 @@ async function save(){
   if(gen!==generation)return;
   if(error){if(error.code==='23505')throw Error('Há dados mais recentes na conta. Exporte seu backup antes de carregar novamente.');throw error;}
   if(!data)throw Error('Outra aba atualizou a conta. Exporte seu backup antes de carregar novamente.');
-  stamp=data.updated_at;tell('Time, Pokémon individuais e combos salvos na sua conta.');
+  stamp=data.updated_at;accountBaseline=JSON.stringify(payload);lastAccountSeen='';persistAccountDraft();tell('Time, Pokémon individuais e combos salvos na sua conta.');
 }
 async function task(fn){if(busy)return;busy=true;controls();try{await fn();}catch(e){tell('Não foi possível concluir: '+e.message);}finally{busy=false;controls();}}
 async function sessionChanged(session){
   const id=session?.user?.id||null;if(id===owner)return;
+  preserveCurrent();accountBaseline='';lastAccountSeen='';pendingAccountDraft=null;
   if(guest){try{saveLocal();}catch(e){tell("Falha ao preservar a cópia local: "+e.message);}}guest=false;
   document.body.classList.toggle('signed-out',!id);
   generation++;owner=id;ready=false;stamp=null;clear();$('account-password').value='';$('new-password').value='';$('calculator').hidden=true;$('account-controls').hidden=!id;$('login-form').hidden=!!id;$('account-user').textContent=session?.user?.email||'';modeLabels();controls();
   if(id){try{await load(true);}catch(e){tell('Falha ao carregar dados. Recarregue a página para tentar novamente: '+e.message);}controls();}
   else tell('Entre ou crie sua conta para salvar seus Pokémon online.');
+  draftStatus();
 }
 
 function modeLabels(){
@@ -67,8 +103,20 @@ function modeLabels(){
  $('signout').textContent=guest?'Entrar / criar conta':'Sair da conta';
  $('cloud-use-local').hidden=guest||!owner;
  $('guest-entry').hidden=!!owner||guest;
- $('storage-note').textContent=guest?'Salvamento automático neste navegador. Exporte um backup para transferir seus dados. Limpar os dados do site apaga a cópia local.':'No primeiro acesso de uma conta vazia, os dados locais são importados automaticamente. Depois, use Salvar alterações para atualizar a nuvem.';
+ draftStatus();
+ $('storage-note').textContent=guest?'Salvamento automático neste navegador. Exporte um backup para transferir seus dados. Limpar os dados do site apaga a cópia local.':'Alterações ficam preservadas neste navegador. Use Salvar alterações para sincronizar com sua conta em outros dispositivos.';
 }
+$('restore-account-draft').onclick=()=>task(async()=>{
+ const draft=pendingAccountDraft||readAccountDraft(owner);
+ if(!owner||!ready||!draft)throw Error('Nenhum rascunho disponível para esta conta.');
+ if(draft.error)throw Error('Não foi possível ler o rascunho: '+draft.error);
+ apply(normalize(draft.payload));pendingAccountDraft=null;lastAccountSeen='';persistAccountDraft();
+ tell('Rascunho local recuperado para revisão. Use Salvar alterações para enviar à conta.');
+});
+for(const event of ['input','change','click'])document.addEventListener(event,()=>{const gen=generation;setTimeout(()=>{if(gen===generation&&!busy)preserveCurrent();},0);});
+window.addEventListener('pagehide',preserveCurrent);
+window.addEventListener('beforeunload',preserveCurrent);
+setInterval(()=>{if(!busy&&!guest)preserveCurrent();},1000);
 function saveLocal(){const value=JSON.stringify(normalize(snapshot()));localStorage.setItem(localKey,value);lastLocal=value;}
 function enterGuest(){
  if(owner||busy)return;
@@ -98,7 +146,12 @@ async function importData(data){
  if(guest){saveLocal();importStatus(message+' Salvos neste navegador.');}
  else importStatus(message+' Clique em Salvar alterações para guardar na conta.');
 }
-window.pokeBackup={importData};
+window.pokeBackup={importData,async saveCard(){
+ const gen=generation;preserveCurrent();
+ if(busy)return {saved:false,guest};
+ let saved=false;await task(async()=>{await save();saved=true;});
+ return gen===generation?{saved,guest}:null;
+}};
 function describeBackup(data){
  const type=value=>value===null?'nulo':Array.isArray(value)?'lista':typeof value==='object'?'objeto':typeof value==='string'?'texto':typeof value==='number'?'número':typeof value==='undefined'?'ausente':typeof value;
  if(!data||typeof data!=='object'||Array.isArray(data))return 'Formato: JSON do tipo '+type(data)+' (esperado: objeto de backup).';

@@ -195,12 +195,15 @@
     document.getElementById('pokemon-library').innerHTML='<option value="">Escolha um Pokémon salvo</option>'+library.map((p,i)=>'<option value="'+i+'">'+escape(p.name)+(library.filter(other=>other.name===p.name).length>1?' · versão '+(library.slice(0,i+1).filter(other=>other.name===p.name).length):'')+'</option>').join('');
     libraryControls();
   }
-  team.addEventListener('click',event=>{
+  team.addEventListener('click',async event=>{
     const button=event.target.closest('[data-action="save-pokemon"]');if(!button)return;
     const p=state.team[Number(button.closest('[data-index]').dataset.index)];
     const card={...p,moves:p.moves.map(m=>({...m,remaining:0,total:0}))};
     const next=[...library,card];
-    try{localStorage.setItem(libraryKey,JSON.stringify(next));library=next;renderLibrary();document.getElementById('pokemon-library').value=library.length-1;libraryControls();cardsStatus(p.name+' adicionado à biblioteca. Clique em Salvar na conta.');}
+    try{localStorage.setItem(libraryKey,JSON.stringify(next));library=next;renderLibrary();document.getElementById('pokemon-library').value=library.length-1;libraryControls();cardsStatus(p.name+' adicionado à biblioteca. Salvando…');
+      const result=await window.pokeBackup?.saveCard();
+      if(result?.saved)cardsStatus(p.name+(result.guest?' salvo neste navegador.':' salvo na biblioteca e na conta.'));
+      else if(result)cardsStatus(p.name+' adicionado à biblioteca, mas o salvamento na conta não foi confirmado. Confira a mensagem em Minha conta.');}
     catch{cardsStatus('Não foi possível salvar o Pokémon no navegador.');}
   });
   document.getElementById('pokemon-library').onchange=libraryControls;
