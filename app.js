@@ -35,7 +35,7 @@
     box.targets.forEach(t=>{
       const tile=document.getElementById(`dummy-${t.id}`);
       tile.classList.toggle('dead',t.hp===0);
-      tile.querySelector('.dummy-hp').textContent=t.hp===0?'Derrotado':`${Math.ceil(t.hp).toLocaleString('pt-BR')} HP`;
+      tile.querySelector('.dummy-hp').textContent=t.hp===0?'Derrotado':`${t.hp.toLocaleString('pt-BR',{maximumFractionDigits:1})} HP`;
       tile.querySelector('progress').value=t.hp;
       tile.querySelector('.dummy-hit').textContent=`${t.lastDamage ? '−'+t.lastDamage.toLocaleString('pt-BR',{maximumFractionDigits:1})+' · ' : ''}Críticos acumulados: ${t.totalCriticalHits||0}/${t.totalHits||0} hits`;
     });
@@ -78,7 +78,7 @@
         card.querySelectorAll(`[data-move="${j}"][data-field="damagePerHit"], [data-move="${j}"][data-field="hits"]`).forEach(input=>input.disabled=m.focus===true);
         button.querySelector('.move-value').textContent=ready?'Pronto':`${fmt(m.remaining)}s`;
         const total=E.effective(m.base,p.held,p.heldMode);
-        card.querySelector(`[data-summary="${j}"]`).textContent=m.focus?'Focus: próximo golpe deste Pokémon causa ×1,5 de dano em todos os hits, antes do crítico.':`Dano total sem crítico: ${(m.damagePerHit*m.hits*E.attackMultiplier(p, state)*2).toLocaleString('pt-BR', {maximumFractionDigits:2})} por alvo (super efetivo ×2; ATK +${Number(((E.attackMultiplier(p, state)-1)*100).toFixed(2))}%${p.food==='blaziken'?', inclui food':''})`;
+        card.querySelector(`[data-summary="${j}"]`).textContent=m.focus?'Focus: próximo golpe deste Pokémon causa ×1,5 de dano em todos os hits, antes do crítico.':`Dano total sem crítico: ${(m.damagePerHit*m.hits*E.attackMultiplier(p, state)).toLocaleString('pt-BR', {maximumFractionDigits:2})} por alvo (neutro ×1; ATK +${Number(((E.attackMultiplier(p, state)-1)*100).toFixed(2))}%${p.food==='blaziken'?', inclui food':''})`;
         button.querySelector('.move-meta').textContent=ready?`${fmt(total)}s total`:rate?`pronto em ${fmt(m.remaining/rate)}s`:'parado na ball';
         button.querySelector('.fill').style.width=`${ready?100:Math.max(0,100*(1-m.remaining/(m.total||1)))}%`;
         button.setAttribute('aria-label',`${p.name}, ${m.name}: ${ready?`pronto, cooldown ${fmt(total)} segundos${active?', usar golpe':', tire da ball para usar'}`:`${fmt(m.remaining)} segundos de cooldown restantes`}`);
@@ -118,7 +118,7 @@
   document.getElementById('add').onclick=()=>{if(state.team.length>=12)return;sync();state.team.push(makePokemon(`Pokémon ${state.team.length+1}`));render();const card=team.lastElementChild;card.querySelector('details').open=true;card.querySelector('[data-field=name]').focus();};
   const boxGrid=document.getElementById('box-grid');
   let dummyId=0;
-  boxGrid.innerHTML=Array.from({length:9},(_,slot)=>slot===4?'<div class="box-center"><span>FORA DA BALL</span><strong id="box-center"></strong></div>':`<div class="dummy" id="dummy-${dummyId}"><strong>Dummy ${dummyId+1}</strong><span class="dummy-hp"></span><progress max="797539" value="797539" aria-label="Vida do Dummy ${dummyId+1}"></progress><span class="dummy-hit"></span></div>${(dummyId++,'')}`).join('');
+  boxGrid.innerHTML=Array.from({length:9},(_,slot)=>slot===4?'<div class="box-center"><span>FORA DA BALL</span><strong id="box-center"></strong></div>':`<div class="dummy" id="dummy-${dummyId}"><strong>Dummy ${dummyId+1}</strong><span class="dummy-hp"></span><progress max="${E.DUMMY_HP}" value="${E.DUMMY_HP}" aria-label="Vida do Dummy ${dummyId+1}"></progress><span class="dummy-hit"></span></div>${(dummyId++,'')}`).join('');
   window.pokeSimulator={state,cast,swap,sync,isPaused:()=>paused,resume:()=>{sync();paused=false;document.getElementById('pause').textContent='Pausar';update();}};
 
   const cardsKey='poke-cards-v1';
@@ -175,19 +175,41 @@
 
 
   const libraryKey='poke-individual-cards-v1';
-  let library=[];
+  let library=[],removedLibraryCard=null;
   try{const saved=JSON.parse(localStorage.getItem(libraryKey));if(Array.isArray(saved))library=saved;}catch{}
+  function libraryControls(){
+    const selected=document.getElementById('pokemon-library').value;
+    document.getElementById('delete-pokemon').disabled=selected===''||!library[Number(selected)];
+    document.getElementById('undo-delete-pokemon').hidden=!removedLibraryCard;
+  }
   function renderLibrary(){
-    document.getElementById('pokemon-library').innerHTML='<option value="">Escolha um Pokémon salvo</option>'+library.map((p,i)=>'<option value="'+i+'">'+escape(p.name)+'</option>').join('');
+    document.getElementById('pokemon-library').innerHTML='<option value="">Escolha um Pokémon salvo</option>'+library.map((p,i)=>'<option value="'+i+'">'+escape(p.name)+(library.filter(other=>other.name===p.name).length>1?' · versão '+(library.slice(0,i+1).filter(other=>other.name===p.name).length):'')+'</option>').join('');
+    libraryControls();
   }
   team.addEventListener('click',event=>{
     const button=event.target.closest('[data-action="save-pokemon"]');if(!button)return;
     const p=state.team[Number(button.closest('[data-index]').dataset.index)];
     const card={...p,moves:p.moves.map(m=>({...m,remaining:0,total:0}))};
     const next=[...library,card];
-    try{localStorage.setItem(libraryKey,JSON.stringify(next));library=next;renderLibrary();document.getElementById('pokemon-library').value=library.length-1;cardsStatus(p.name+' adicionado à biblioteca. Clique em Salvar na conta.');}
+    try{localStorage.setItem(libraryKey,JSON.stringify(next));library=next;renderLibrary();document.getElementById('pokemon-library').value=library.length-1;libraryControls();cardsStatus(p.name+' adicionado à biblioteca. Clique em Salvar na conta.');}
     catch{cardsStatus('Não foi possível salvar o Pokémon no navegador.');}
   });
+  document.getElementById('pokemon-library').onchange=libraryControls;
+  document.getElementById('delete-pokemon').onclick=()=>{
+    const selected=document.getElementById('pokemon-library').value,index=Number(selected);
+    if(selected===''||!Number.isInteger(index)||!library[index])return;
+    const card=library[index],next=library.filter((_,i)=>i!==index);
+    try{localStorage.setItem(libraryKey,JSON.stringify(next));removedLibraryCard={index,card};library=next;renderLibrary();cardsStatus(card.name+' excluído da biblioteca. O time atual foi mantido. Você pode desfazer; na conta, use Salvar alterações.');}
+    catch{cardsStatus('Não foi possível excluir o card.');}
+  };
+  document.getElementById('undo-delete-pokemon').onclick=()=>{
+    if(!removedLibraryCard)return;
+    if(library.length>=500){cardsStatus('A biblioteca atingiu o limite de 500 cards.');return;}
+    const {index,card}=removedLibraryCard,next=[...library],position=Math.min(index,library.length);
+    next.splice(position,0,card);
+    try{localStorage.setItem(libraryKey,JSON.stringify(next));library=next;removedLibraryCard=null;renderLibrary();document.getElementById('pokemon-library').value=position;libraryControls();cardsStatus(card.name+' restaurado na biblioteca.');}
+    catch{cardsStatus('Não foi possível restaurar o card.');}
+  };
   document.getElementById('load-pokemon').onclick=()=>{
     const selected=document.getElementById('pokemon-library').value;if(selected===''){cardsStatus('Escolha um Pokémon salvo.');return;}
     if(state.team.length>=12){cardsStatus('Limite de 12 Pokémon. Remova um card antes de carregar outro.');return;}
@@ -202,7 +224,7 @@
   window.pokeCards={snapshot:cardsSnapshot,validate:validateCards,
     library:()=>JSON.parse(JSON.stringify(library)),
     validateLibrary(items){if(!Array.isArray(items)||items.length>500)throw Error('Biblioteca inválida (máximo 500).');for(const p of items)validateCards({...cardsSnapshot(),team:[p]});},
-    restore(cards,items){this.validate(cards);this.validateLibrary(items);document.getElementById('auto-stop').click();restoreCards(cards);library=JSON.parse(JSON.stringify(items));renderLibrary();render();},
+    restore(cards,items){this.validate(cards);this.validateLibrary(items);document.getElementById('auto-stop').click();restoreCards(cards);library=JSON.parse(JSON.stringify(items));removedLibraryCard=null;renderLibrary();render();},
     reset(){this.restore({team:['Charizard','Blastoise','Venusaur','Pikachu','Gengar','Dragonite'].map(makePokemon),active:0,disk:6,globalCrit:0,globalAtk:0},[]);}
   };
 

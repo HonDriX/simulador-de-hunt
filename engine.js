@@ -1,4 +1,5 @@
 (function (root) {
+  const DUMMY_HP = 398769.5;
   const effective = (base, held, mode) => Math.max(0, mode === 'seconds' ? base - held : base * (1 - held / 100));
   function advance(state, seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Tempo inválido');
@@ -18,7 +19,7 @@
     p.focusReady = false;
     if (state.box && state.box.finishedAt === null) {
       const box = state.box;
-      const damage = (m.damagePerHit || 0) * focusMultiplier * attackMultiplier(p, state) * 2 * (1 + Math.max(0, Number(elixir) || 0) / 100);
+      const damage = (m.damagePerHit || 0) * focusMultiplier * attackMultiplier(p, state) * (1 + Math.max(0, Number(elixir) || 0) / 100);
       if (damage > 0) {
         if (box.startedAt === null) box.startedAt = state.elapsed;
         box.casts++;
@@ -61,9 +62,9 @@
     });
   }
   function newBox() {
-    return { maxHp: 797539, targets: Array.from({length:8}, (_,id) => ({id,hp:797539,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
+    return { maxHp: DUMMY_HP, targets: Array.from({length:8}, (_,id) => ({id,hp:DUMMY_HP,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
   }
-  const api = { effective, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
+  const api = { DUMMY_HP, effective, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
   if (typeof module !== 'undefined') module.exports = api;
   else root.CooldownEngine = api;
 })(globalThis);
