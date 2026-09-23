@@ -1,7 +1,7 @@
 (() => {
   const E = CooldownEngine;
   const localStorage = {getItem:()=>null,setItem:()=>{}};
-  const makePokemon = name => ({ name, held: 0, heldCrit: 0, atk: 0, food: null, heldMode: 'percent', moves: [25, 40, 40, 40, 50, 50].map((base, i) => ({ name: `Golpe ${i + 1}`, base, damagePerHit: 0, hits: 1, remaining: 0, total: 0 })) });
+  const makePokemon = name => ({ name, held: 0, heldCrit: 0, atk: 0, heldChoice: 'none', damageMeasuredWithAtk8: false, food: null, heldMode: 'percent', moves: [25, 40, 40, 40, 50, 50].map((base, i) => ({ name: `Golpe ${i + 1}`, base, damagePerHit: 0, hits: 1, remaining: 0, total: 0 })) });
   const state = { active: 0, disk: 6, globalCrit: 0, globalAtk: 0, elapsed: 0, team: ['Charizard','Blastoise','Venusaur','Pikachu','Gengar','Dragonite'].map(makePokemon) };
   state.box = E.newBox();
   let paused = true, last = performance.now();
@@ -18,8 +18,9 @@
       <div class="moves">${p.moves.map((m,j) => `<button class="move" data-action="cast" data-move="${j}"><span class="move-title">${escape(m.name)}</span><span class="move-value"></span><span class="move-meta"></span><span class="fill"></span></button>`).join('')}</div>
       <details><summary>Configurar Pokémon e golpes</summary><div class="settings">
         <div class="settings-heading"><label>Nome do Pokémon<input data-field="name" value="${escape(p.name)}" maxlength="35"></label><button class="quiet" data-action="save-pokemon">Salvar Pokémon</button><button class="quiet remove" data-action="remove" ${state.team.length===1?'disabled':''}>Remover</button></div>
-        <div class="equipment-inputs"><label>Redução de cooldown do held (%)<input data-field="held" type="number" min="0" max="100" step="0.1" value="${p.held}"></label><label>Chance de crítico do held (%)<input data-field="heldCrit" type="number" min="0" max="100" step="0.1" value="${p.heldCrit}"></label><label>ATK (%)<input data-field="atk" type="number" min="0" max="10000" step="0.1" value="${p.atk||0}"></label></div>
-        <p class="setting-note">ATK soma com o ATK global e com os 3% da Blaziken Food.</p>
+        <label class="damage-source-check"><input type="checkbox" data-field="damageMeasuredWithAtk8" ${p.damageMeasuredWithAtk8===true?'checked':''}> Danos medidos com ATK 8 (+31%)</label>
+        <div class="equipment-inputs"><label>Held da simulação<select data-field="heldChoice"><option value="none" ${E.heldChoice(p)==='none'?'selected':''}>Sem held de ATK/CD</option><option value="atk" ${E.heldChoice(p)==='atk'?'selected':''}>ATK</option><option value="cooldown" ${E.heldChoice(p)==='cooldown'?'selected':''}>Cooldown</option></select></label><label>Redução de cooldown do held (%)<input data-field="held" type="number" min="0" max="100" step="0.1" value="${p.held}"></label><label>Chance de crítico do held (%)<input data-field="heldCrit" type="number" min="0" max="100" step="0.1" value="${p.heldCrit}"></label><label>ATK do held (%)<input data-field="atk" type="number" min="0" max="10000" step="0.1" value="${p.atk||0}"></label></div>
+        <p class="setting-note held-detail"></p><p class="setting-note">ATK e Cooldown são alternativos. O ATK ativo soma com o ATK global e com a Blaziken Food. O crítico é configurado separadamente.</p>
         <p class="setting-note crit-detail"></p>
         <div class="move-config">${p.moves.map((m,j)=>`<fieldset class="move-fields"><legend>Golpe ${j+1} <label class="focus-option"><input type="checkbox" data-field="focus" data-move="${j}" ${m.focus===true?'checked':''}> Focus</label></legend><label>Nome<input aria-label="Nome do golpe ${j+1}" data-field="moveName" data-move="${j}" maxlength="24" value="${escape(m.name)}"></label><label>Cooldown base (s)<input aria-label="Cooldown base do golpe ${j+1} em segundos" type="number" min="0" max="86400" step="0.1" data-field="base" data-move="${j}" value="${m.base}"></label><label>Dano por hit<input aria-label="Dano por hit do golpe ${j+1}" type="number" min="0" max="1000000000" step="0.1" data-field="damagePerHit" data-move="${j}" value="${m.damagePerHit}"></label><label>Número de hits<input aria-label="Número de hits do golpe ${j+1}" type="number" min="1" max="10000" step="1" data-field="hits" data-move="${j}" value="${m.hits}"></label><output class="damage-summary" data-summary="${j}"></output></fieldset>`).join('')}</div>
         <p class="setting-note">Os tempos iniciais são exemplos. Configure os valores do seu jogo. Mudanças no held e no cooldown base valem no próximo uso.</p>
@@ -65,7 +66,13 @@
       card.querySelector('.position').textContent=active?'FORA DA BALL · 1s/s':state.disk?`NA BALL · 1s a cada ${state.disk}s`:'NA BALL · sem recuperação';
       card.querySelector('.ready-count').textContent=`${p.moves.filter(m=>m.remaining<=0.000001).length}/${p.moves.length} prontos`;
       card.querySelector('.disk-label').textContent=active?'Disco não se aplica':state.disk?`${diskNames[state.disk]} · 1:${state.disk}`:'Sem disco';
-      card.querySelector('.held-label').textContent=p.held?`CD −${p.held}${p.heldMode==='percent'?'%':'s'}`:'Sem redução de CD';
+      const choice=E.heldChoice(p);
+      card.querySelector('.held-label').textContent=choice==='atk'?'ATK +'+E.activeAttackBonus(p)+'%':choice==='cooldown'?'CD −'+E.activeCooldownBonus(p)+'%':'Sem held de ATK/CD';
+      card.querySelector('[data-field="heldChoice"]').value=choice;
+      card.querySelector('[data-field="atk"]').disabled=choice!=='atk';
+      card.querySelector('[data-field="held"]').disabled=choice!=='cooldown';
+      card.querySelector('[data-field="damageMeasuredWithAtk8"]').checked=p.damageMeasuredWithAtk8===true;
+      card.querySelector('.held-detail').textContent=p.damageMeasuredWithAtk8?'Dano digitado ÷ 1,31 = dano base. Depois são aplicados os bônus da simulação. Os valores digitados ficam preservados.':'Os danos digitados são tratados como dano base. Marque acima se o teste já incluía os 31% do ATK 8.';
       const chance = Number(E.criticalChance(state,p).toFixed(2));
       card.querySelector('.crit-label').textContent=`Crítico ${chance}% · dano ×2`;
       card.querySelector('.crit-detail').textContent=`${state.globalCrit}% global + ${p.heldCrit}% do held${p.food==='salad'?' + 3% da Elite Salad':''} = ${chance}% de crítico${state.globalCrit+p.heldCrit+(p.food==='salad'?3:0)>100?' (limite de 100%)':''}. Sorteio independente para cada hit em cada alvo.`;
@@ -77,8 +84,8 @@
         button.querySelector('.move-title').textContent=m.name+(m.focus?' · Focus':p.focusReady?' · ×1,5':'');
         card.querySelectorAll(`[data-move="${j}"][data-field="damagePerHit"], [data-move="${j}"][data-field="hits"]`).forEach(input=>input.disabled=m.focus===true);
         button.querySelector('.move-value').textContent=ready?'Pronto':`${fmt(m.remaining)}s`;
-        const total=E.effective(m.base,p.held,p.heldMode);
-        card.querySelector(`[data-summary="${j}"]`).textContent=m.focus?'Focus: próximo golpe deste Pokémon causa ×1,5 de dano em todos os hits, antes do crítico.':`Dano total sem crítico: ${(m.damagePerHit*m.hits*E.attackMultiplier(p, state)).toLocaleString('pt-BR', {maximumFractionDigits:2})} por alvo (neutro ×1; ATK +${Number(((E.attackMultiplier(p, state)-1)*100).toFixed(2))}%${p.food==='blaziken'?', inclui food':''})`;
+        const total=E.moveCooldown(p,m);
+        card.querySelector(`[data-summary="${j}"]`).textContent=m.focus?'Focus: próximo golpe deste Pokémon causa ×1,5 de dano em todos os hits, antes do crítico.':`${p.damageMeasuredWithAtk8?'Dano base por hit: '+E.baseDamagePerHit(p,m).toLocaleString('pt-BR',{maximumFractionDigits:2})+' (informado ÷ 1,31). ':''}Dano total sem crítico: ${(E.baseDamagePerHit(p,m)*m.hits*E.attackMultiplier(p, state)).toLocaleString('pt-BR', {maximumFractionDigits:2})} por alvo (neutro ×1; ATK +${Number(((E.attackMultiplier(p, state)-1)*100).toFixed(2))}%${p.food==='blaziken'?', inclui food':''})`;
         button.querySelector('.move-meta').textContent=ready?`${fmt(total)}s total`:rate?`pronto em ${fmt(m.remaining/rate)}s`:'parado na ball';
         button.querySelector('.fill').style.width=`${ready?100:Math.max(0,100*(1-m.remaining/(m.total||1)))}%`;
         button.setAttribute('aria-label',`${p.name}, ${m.name}: ${ready?`pronto, cooldown ${fmt(total)} segundos${active?', usar golpe':', tire da ball para usar'}`:`${fmt(m.remaining)} segundos de cooldown restantes`}`);
@@ -99,6 +106,8 @@
     const p=state.team[Number(input.closest('[data-index]').dataset.index)],j=Number(input.dataset.move);
     if(field==='name')p.name=input.value||'Pokémon';
     if(field==='moveName')p.moves[j].name=input.value||`Golpe ${j+1}`;
+    if(field==='damageMeasuredWithAtk8')p.damageMeasuredWithAtk8=input.checked;
+    if(field==='heldChoice'){E.setHeldChoice(p,input.value);const card=input.closest('[data-index]');card.querySelector('[data-field="atk"]').value=p.atk||0;card.querySelector('[data-field="held"]').value=p.held||0;}
     if(field==='focus')p.moves[j].focus=input.checked;
     if(field==='food')p.food=input.checked?input.value:null;
     if(field==='heldCrit'){p.heldCrit=E.percent(input.value);if(Number(input.value)<0||Number(input.value)>100)input.value=p.heldCrit;}
@@ -131,6 +140,8 @@
     if(data.team.length<1||data.team.length>12)throw Error('O time tem '+data.team.length+' Pokémon; o limite é de 1 a 12.');
     for(const p of data.team){
       if(!p||typeof p.name!=='string'||!num(p.held,100)||!num(p.heldCrit,100)||!num(p.atk||0,10000)||![null,undefined,'blaziken','salad'].includes(p.food)||!Array.isArray(p.moves)||p.moves.length!==6)throw Error('Configuração de Pokémon inválida.');
+      if(p.heldChoice!==undefined&&!['none','atk','cooldown'].includes(p.heldChoice))throw Error('Held da simulação inválido.');
+      if(p.damageMeasuredWithAtk8!==undefined&&typeof p.damageMeasuredWithAtk8!=='boolean')throw Error('Origem dos danos inválida.');
       for(const m of p.moves)if(!m||(m.focus!==undefined&&typeof m.focus!=='boolean')||typeof m.name!=='string'||!num(m.base,86400)||!num(m.damagePerHit,1e9)||!Number.isInteger(m.hits)||m.hits<1||m.hits>10000)throw Error('Configuração de golpe inválida.');
     }
     if(![0,3,4,6,8].includes(data.disk)||!num(data.globalCrit,100)||!num(data.globalAtk||0,10000))throw Error('Configuração global inválida.');

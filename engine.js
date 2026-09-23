@@ -1,6 +1,18 @@
 (function (root) {
   const DUMMY_HP = 398769.5;
   const effective = (base, held, mode) => Math.max(0, mode === 'seconds' ? base - held : base * (1 - held / 100));
+  const heldChoices = ['none', 'atk', 'cooldown'];
+  const heldChoice = p => heldChoices.includes(p.heldChoice) ? p.heldChoice : Number(p.held) > 0 ? 'cooldown' : Number(p.atk) > 0 ? 'atk' : 'none';
+  const activeAttackBonus = p => heldChoice(p) === 'atk' ? Math.max(0, Number(p.atk) || 0) : 0;
+  const activeCooldownBonus = p => heldChoice(p) === 'cooldown' ? Math.max(0, Number(p.held) || 0) : 0;
+  const moveCooldown = (p, m) => effective(m.base, activeCooldownBonus(p), p.heldMode);
+  const baseDamagePerHit = (p, m) => (Number(m.damagePerHit) || 0) / (p.damageMeasuredWithAtk8 === true ? 1.31 : 1);
+  function setHeldChoice(p, choice) {
+    if (!heldChoices.includes(choice)) throw new Error('Held inválido');
+    p.heldChoice = choice;
+    if (choice === 'atk' && !p.atk) p.atk = 31;
+    if (choice === 'cooldown' && !p.held) p.held = 17;
+  }
   function advance(state, seconds) {
     if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Tempo inválido');
     state.elapsed += seconds;
@@ -12,14 +24,14 @@
   function cast(state, pokemon, move, random = Math.random, elixir = 0) {
     const p = state.team[pokemon], m = p?.moves[move];
     if (!m || pokemon !== state.active || m.remaining > 0.000001) return false;
-    m.total = effective(m.base, p.held, p.heldMode);
+    m.total = moveCooldown(p, m);
     m.remaining = m.total;
     if (m.focus === true) { p.focusReady = true; return true; }
     const focusMultiplier = p.focusReady ? 1.5 : 1;
     p.focusReady = false;
     if (state.box && state.box.finishedAt === null) {
       const box = state.box;
-      const damage = (m.damagePerHit || 0) * focusMultiplier * attackMultiplier(p, state) * (1 + Math.max(0, Number(elixir) || 0) / 100);
+      const damage = baseDamagePerHit(p, m) * focusMultiplier * attackMultiplier(p, state) * (1 + Math.max(0, Number(elixir) || 0) / 100);
       if (damage > 0) {
         if (box.startedAt === null) box.startedAt = state.elapsed;
         box.casts++;
@@ -48,7 +60,7 @@
     state.active = index;
   }
   const percent = value => Math.min(100, Math.max(0, Number(value) || 0));
-  const attackMultiplier = (pokemon, state = {}) => 1 + (Math.max(0, Number(pokemon.atk) || 0) + Math.max(0, Number(state.globalAtk) || 0) + (pokemon.food === 'blaziken' ? 3 : 0)) / 100;
+  const attackMultiplier = (pokemon, state = {}) => 1 + (activeAttackBonus(pokemon) + Math.max(0, Number(state.globalAtk) || 0) + (pokemon.food === 'blaziken' ? 3 : 0)) / 100;
   const criticalChance = (state, pokemon) => percent(percent(state.globalCrit) + percent(pokemon.heldCrit) + (pokemon.food === 'salad' ? 3 : 0));
   // damage is the damage per hit; every hit on every target has an independent roll.
   function damagePerTarget(state, pokemon, targets, random = Math.random) {
@@ -64,7 +76,7 @@
   function newBox() {
     return { maxHp: DUMMY_HP, targets: Array.from({length:8}, (_,id) => ({id,hp:DUMMY_HP,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
   }
-  const api = { DUMMY_HP, effective, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
+  const api = { DUMMY_HP, effective, heldChoice, activeAttackBonus, activeCooldownBonus, moveCooldown, baseDamagePerHit, setHeldChoice, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
   if (typeof module !== 'undefined') module.exports = api;
   else root.CooldownEngine = api;
 })(globalThis);
