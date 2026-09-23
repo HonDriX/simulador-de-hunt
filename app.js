@@ -157,7 +157,12 @@
   document.getElementById('cards-file').onchange=async event=>{
     const file=event.target.files[0];if(!file)return;
     try{
-      const data=validateCards(JSON.parse(await file.text()));
+      const parsed=JSON.parse(await file.text());
+      if(parsed.cards){
+        if(!window.pokeBackup)throw Error('A importação completa ainda está carregando. Aguarde alguns segundos e tente novamente.');
+        await window.pokeBackup.importData(parsed);return;
+      }
+      const data=validateCards(parsed);
       document.getElementById('auto-stop').click();restoreCards(data);render();
       try{localStorage.setItem(cardsKey,JSON.stringify(cardsSnapshot()));cardsStatus('Cards importados. Clique em Salvar na conta para guardá-los online.');}
       catch{cardsStatus('Cards importados apenas nesta sessão; armazenamento indisponível.');}
