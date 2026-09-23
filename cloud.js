@@ -5,6 +5,7 @@ let owner=null,stamp=null,ready=false,generation=0,busy=false,guest=false;
 const localKey="hondrix-guest-backup-v1";
 let lastLocal="";
 const tell=text=>{$('account-status').textContent=text;};
+const importStatus=text=>{tell(text);$('cards-status').textContent=text;};
 function controls(){for(const id of ['cloud-save','cloud-load','cloud-import','cloud-export'])$(id).disabled=busy||!ready;}
 function snapshot(){return {version:1,cards:pokeCards.snapshot(),library:pokeCards.library(),combos:pokeCombos.snapshot(),automation:{sequence:$('auto-sequence').value,delay:Number($('auto-delay').value),repeat:$('auto-repeat').checked}};}
 function normalize(data){
@@ -89,7 +90,7 @@ $('recovery-form').onsubmit=event=>{event.preventDefault();task(async()=>{const 
 $('cloud-save').onclick=()=>task(save);
 $('cloud-load').onclick=()=>task(load);
 $('cloud-import').onclick=()=>$('cloud-file').click();
-$('cloud-file').onchange=event=>{const file=event.target.files[0];event.target.value='';if(!file)return;const gen=generation;task(async()=>{if(file.size>1000000)throw Error('Arquivo muito grande.');const p=normalize(JSON.parse(await file.text()));if(gen!==generation||!ready)return;apply(p);if(guest){saveLocal();tell('Backup importado e salvo neste navegador.');}else tell('Backup importado. Revise os cards e clique em Salvar alterações.');});};
+$('cloud-file').onchange=$('cards-file').onchange=event=>{const file=event.target.files[0];event.target.value='';if(!file)return;const gen=generation;task(async()=>{if(file.size>1000000)throw Error('Arquivo muito grande.');try{const p=normalize(JSON.parse(await file.text()));if(gen!==generation||!ready)return;apply(p);document.querySelector('[data-panel="pokemon"]').click();const count=p.cards.team.length;if(guest){saveLocal();importStatus(count+' Pokémon importados, com biblioteca e combos. Backup salvo neste navegador.');}else importStatus(count+' Pokémon importados, com biblioteca e combos. Clique em Salvar alterações para guardar na conta.');}catch(e){importStatus('Falha ao importar: '+e.message);}});};
 $('cloud-export').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='hondrix-backup-completo.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 $('signout').onclick=()=>task(async()=>{if(guest){saveLocal();guest=false;ready=false;generation++;clear();document.body.classList.add('signed-out');$('calculator').hidden=true;$('account-controls').hidden=true;$('login-form').hidden=false;modeLabels();tell('Entre para usar seus dados online. A cópia local foi preservada.');return;}const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;await sessionChanged(null);});
 client.auth.onAuthStateChange((event,session)=>{if(event==='PASSWORD_RECOVERY')$('recovery-form').hidden=false;setTimeout(()=>sessionChanged(session),0);});
