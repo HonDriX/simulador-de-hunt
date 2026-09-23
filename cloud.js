@@ -19,14 +19,22 @@ function normalize(data){
 }
 function apply(p){normalize(p);pokeCombos.stop();pokeCards.restore(p.cards,p.library);pokeCombos.restore(p.combos);$('auto-sequence').value=p.automation.sequence;$('auto-delay').value=p.automation.delay;$('auto-repeat').checked=p.automation.repeat;}
 function clear(){pokeCombos.stop();pokeCards.reset();pokeCombos.restore(Array(6).fill(null));$('auto-sequence').value='poke 1 cds 1 a 6';$('auto-delay').value=0.5;$('auto-repeat').checked=false;}
-async function load(){
+async function load(migrateLocal=false){
   if(guest){const raw=localStorage.getItem(localKey);if(raw){apply(normalize(JSON.parse(raw)));lastLocal=JSON.stringify(snapshot());tell('Backup local carregado.');}else tell('Ainda não há backup neste navegador.');return;}
   const id=owner,gen=generation;
   const {data,error}=await client.from('pokemon_saves').select('payload,updated_at').eq('user_id',id).maybeSingle();
   if(gen!==generation)return;
   if(error)throw error;
   if(data){apply(normalize(data.payload));stamp=data.updated_at;tell('Seus dados foram carregados da conta.');}
-  else{clear();stamp=null;tell('Nenhum backup na conta ainda.');}
+  else{
+    stamp=null;
+    const raw=migrateLocal?localStorage.getItem(localKey):null;
+    if(raw){
+      apply(normalize(JSON.parse(raw)));ready=true;$('calculator').hidden=false;
+      try{await save();tell('Seus cards e combos locais foram salvos automaticamente na conta.');}
+      catch(e){tell('Dados locais carregados, mas não foi possível salvar na conta: '+e.message+'. Tente Salvar alterações.');}
+    }else{clear();tell('Nenhum backup na conta ainda.');}
+  }
   ready=true;$('calculator').hidden=false;
 }
 async function save(){
@@ -47,7 +55,7 @@ async function sessionChanged(session){
   if(guest){try{saveLocal();}catch(e){tell("Falha ao preservar a cópia local: "+e.message);}}guest=false;
   document.body.classList.toggle('signed-out',!id);
   generation++;owner=id;ready=false;stamp=null;clear();$('account-password').value='';$('new-password').value='';$('calculator').hidden=true;$('account-controls').hidden=!id;$('login-form').hidden=!!id;$('account-user').textContent=session?.user?.email||'';modeLabels();controls();
-  if(id){try{await load();}catch(e){tell('Falha ao carregar dados. Recarregue a página para tentar novamente: '+e.message);}controls();}
+  if(id){try{await load(true);}catch(e){tell('Falha ao carregar dados. Recarregue a página para tentar novamente: '+e.message);}controls();}
   else tell('Entre ou crie sua conta para salvar seus Pokémon online.');
 }
 
@@ -57,7 +65,7 @@ function modeLabels(){
  $('signout').textContent=guest?'Entrar / criar conta':'Sair da conta';
  $('cloud-use-local').hidden=guest||!owner;
  $('guest-entry').hidden=!!owner||guest;
- $('storage-note').textContent=guest?'Salvamento automático neste navegador. Exporte um backup para transferir seus dados. Limpar os dados do site apaga a cópia local.':'Salva na sua conta. Para trazer dados do modo local, use Trazer dados deste navegador e depois Salvar alterações.';
+ $('storage-note').textContent=guest?'Salvamento automático neste navegador. Exporte um backup para transferir seus dados. Limpar os dados do site apaga a cópia local.':'No primeiro acesso de uma conta vazia, os dados locais são importados automaticamente. Depois, use Salvar alterações para atualizar a nuvem.';
 }
 function saveLocal(){const value=JSON.stringify(normalize(snapshot()));localStorage.setItem(localKey,value);lastLocal=value;}
 function enterGuest(){
