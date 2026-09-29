@@ -25,7 +25,10 @@
       const alive=state.box.targets.filter(t=>t.hp>0);
       if(alive.length){s.failures++;s.survivors+=alive.length;s.hpLeft+=alive.reduce((sum,t)=>sum+t.hp,0);}
       s.runs++;s.time+=state.elapsed-start;boxes++;
-      if(state.elapsed<=config.seconds)done++;
+      // O intervalo após o golpe ainda avança os cooldowns, mas não adia uma morte já ocorrida.
+      // Se houver sobreviventes, mantém a premissa de finalização com target ao fim do combo.
+      const completedAt=state.box.finishedAt??state.elapsed;
+      if(completedAt<=config.seconds)done++;
     }
     return {boxes:done,stats};
   }
