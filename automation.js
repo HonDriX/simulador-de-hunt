@@ -34,6 +34,7 @@
     return steps;
   }
   if(typeof module!=='undefined'){module.exports={parseSequence};return;}
+  root.parseSequence=parseSequence;
   const localStorage={getItem:()=>null,setItem:()=>{}};
   const sim=root.pokeSimulator,$=id=>document.getElementById(id);
   let run=null;
