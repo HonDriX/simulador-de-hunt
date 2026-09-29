@@ -65,8 +65,8 @@
       return { ...target, hits, criticalHits, critical: criticalHits > 0, damage: target.damage * (hits + criticalHits) };
     });
   }
-  function newBox() {
-    return { maxHp: DUMMY_HP, targets: Array.from({length:8}, (_,id) => ({id,hp:DUMMY_HP,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
+  function newBox(count = 8) {
+    return { maxHp: DUMMY_HP, targets: Array.from({length:count}, (_,id) => ({id,hp:DUMMY_HP,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
   }
   const api = { DUMMY_HP, effective, activeAttackBonus, activeCooldownBonus, moveCooldown, baseDamagePerHit, advance, cast, swap, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
   if (typeof module !== 'undefined') module.exports = api;
