@@ -23,10 +23,19 @@
         if(state.box.finishedAt!==null)break;
       }
       const alive=state.box.targets.filter(t=>t.hp>0);
-      if(alive.length){s.failures++;s.survivors+=alive.length;s.hpLeft+=alive.reduce((sum,t)=>sum+t.hp,0);}
+      if(alive.length){
+        s.failures++;s.survivors+=alive.length;s.hpLeft+=alive.reduce((sum,t)=>sum+t.hp,0);
+        // Uma target finaliza cada sobrevivente. O intervalo após a última skill do combo
+        // já avançou o relógio até a primeira target; cada target mantém o mesmo intervalo.
+        alive.forEach((target,index)=>{
+          target.hp=0;
+          if(index===alive.length-1)state.box.finishedAt=state.elapsed;
+          E.advance(state,c.delay);
+        });
+      }
       s.runs++;s.time+=state.elapsed-start;boxes++;
       // O intervalo após o golpe ainda avança os cooldowns, mas não adia uma morte já ocorrida.
-      // Se houver sobreviventes, mantém a premissa de finalização com target ao fim do combo.
+      // A última target também registra a morte antes do intervalo posterior.
       const completedAt=state.box.finishedAt??state.elapsed;
       if(completedAt<=config.seconds)done++;
     }
@@ -54,8 +63,8 @@
       const r=simulateHour({team:s.state.team,disk:s.state.disk,globalCrit:s.state.globalCrit,globalAtk:s.state.globalAtk,combos:root.pokeCombos.snapshot()});
       const range=r.p10===r.p90?'':` · varia de ${r.p10} a ${r.p90} boxes (p10–p90)`;
       out.textContent=[`${r.boxes} boxes completas em 1h = ${r.boxes*MOBS} mobs (mediana de ${r.runs} horas${range})`,
-        ...r.combos.map(c=>`Combo ${c.combo}: ${n(c.avgTime,1)}s por box · ${c.failures?`não fechou ${n(c.failuresPerHour,1)}x/h (${c.failures}/${c.runs}) · ${n(c.avgSurvivors,1)} mobs vivos com ${n(c.avgHpLeft)} HP (${n(c.avgHpLeft/E.DUMMY_HP*100,1)}%) em média`:'fechou todas as boxes'}`),
-        'Tempo entre boxes desconsiderado; o intervalo de cada combo conta como tempo de reação.'].join('\n');
+        ...r.combos.map(c=>`Combo ${c.combo}: ${n(c.avgTime,1)}s por box · ${c.failures?`precisou de target ${n(c.failuresPerHour,1)}x/h (${c.failures}/${c.runs}) · ${n(c.avgSurvivors,1)} mobs restantes após o combo com ${n(c.avgHpLeft)} HP (${n(c.avgHpLeft/E.DUMMY_HP*100,1)}%) em média`:'fechou todas as boxes'}`),
+        'Tempo entre boxes desconsiderado; o intervalo de cada combo conta como tempo de reação. Finalização incluída: 1 skill target por mob restante, com o mesmo intervalo do combo.'].join('\n');
     }catch(e){out.textContent=e.message;}
   };
 })(globalThis);
