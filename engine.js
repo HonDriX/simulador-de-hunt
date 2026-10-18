@@ -9,6 +9,7 @@
     if (!Number.isFinite(seconds) || seconds < 0) throw new Error('Tempo inválido');
     state.elapsed += seconds;
     state.reviveRemaining = Math.max(0, (state.reviveRemaining || 0) - seconds);
+    state.elixirRemaining = Math.max(0, (state.elixirRemaining || 0) - seconds);
     state.team.forEach((p, index) => {
       const rate = index === state.active ? 1 : state.disk ? 1 / state.disk : 0;
       p.moves.forEach(m => { m.remaining = Math.max(0, m.remaining - seconds * rate); });
@@ -59,6 +60,12 @@
     state.reviveRemaining = cooldown;
     return true;
   }
+  // Cooldown global do elixir de ATK: 3 minutos e 30 segundos.
+  function elixir(state) {
+    if (state.elixirRemaining > 0.000001) return false;
+    state.elixirRemaining = 210;
+    return true;
+  }
   const percent = value => Math.min(100, Math.max(0, Number(value) || 0));
   const attackMultiplier = (pokemon, state = {}) => 1 + (activeAttackBonus(pokemon) + Math.max(0, Number(state.globalAtk) || 0) + (pokemon.food === 'blaziken' ? 3 : 0)) / 100;
   const criticalChance = (state, pokemon) => percent(percent(state.globalCrit) + percent(pokemon.heldCrit) + (pokemon.food === 'salad' ? 3 : 0));
@@ -76,7 +83,7 @@
   function newBox(count = 8) {
     return { maxHp: DUMMY_HP, targets: Array.from({length:count}, (_,id) => ({id,hp:DUMMY_HP,lastDamage:0,critical:false,totalCriticalHits:0,totalHits:0})), startedAt:null, finishedAt:null, casts:0, criticalHits:0, hits:0, lastMove:'' };
   }
-  const api = { DUMMY_HP, effective, activeAttackBonus, activeCooldownBonus, moveCooldown, baseDamagePerHit, advance, cast, swap, revive, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
+  const api = { DUMMY_HP, effective, activeAttackBonus, activeCooldownBonus, moveCooldown, baseDamagePerHit, advance, cast, swap, revive, elixir, percent, criticalChance, damagePerTarget, newBox, attackMultiplier };
   if (typeof module !== 'undefined') module.exports = api;
   else root.CooldownEngine = api;
 })(globalThis);

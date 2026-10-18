@@ -1,0 +1,19 @@
+name: Testes
+on:
+  pull_request:
+  push:
+    branches: [main, feat/combos-8]
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Simulação e regressões de dados
+        run: |
+          node test_hourly.js
+          node test_regressions.cjs

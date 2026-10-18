@@ -6,10 +6,10 @@
   function runHour(config,random){
     const team=config.team.map(p=>({...p,focusReady:false,moves:p.moves.map(m=>({...m,remaining:0,total:0}))}));
     const state={active:0,disk:config.disk,globalCrit:config.globalCrit,globalAtk:config.globalAtk,elapsed:0,team,box:null};
-    const combos=config.combos.map((c,slot)=>c&&{slot,delay:c.delay,pullNext:!!c.pullNext,steps:parseSequence(c.sequence,team)}).filter(Boolean);
+    const combos=config.combos.map((c,slot)=>c&&{slot,delay:c.delay,pullNext:!!c.pullNext&&!c.repeat,steps:parseSequence(c.sequence,team)}).filter(Boolean);
     combos.forEach(c=>{c.first=team.indexOf(c.steps.find(step=>step.pokemon).pokemon);});
     if(!combos.length)throw Error('Salve pelo menos um combo para simular.');
-    const stats=combos.map(c=>({slot:c.slot,runs:0,failures:0,survivors:0,hpLeft:0,time:0,waits:0,waited:0,skipped:0,cut:0}));
+    const stats=combos.map(c=>({slot:c.slot,runs:0,failures:0,survivors:0,hpLeft:0,time:0,waits:0,waited:0,skipped:0,cut:0,elixirWaits:0,elixirWaited:0}));
     const log=[],limit=config.reviveWait??5;
     let turn=0,done=0,idle=0;
     // Com laps, roda um número fixo de voltas pelos combos em vez de preencher o tempo.
@@ -17,35 +17,50 @@
       const i=turn%combos.length,c=combos[i],s=stats[i],start=state.elapsed,reviveStart=state.reviveRemaining||0;
       turn++;
       state.box=E.newBox(MOBS);
-      let revives=0,waited=0,casts=0,cut=false;
-      for(const step of c.steps){
+      let revives=0,waited=0,casts=0,cut=false,elixirWaited=0,pulled=false;
+      const pullNext=()=>{
+        if(!pulled&&c.pullNext)E.swap(state,combos[i+1<combos.length?i+1:0].first);
+        pulled=true;
+      };
+      for(let stepIndex=0;stepIndex<c.steps.length;stepIndex++){
+        const step=c.steps[stepIndex],lastStep=stepIndex===c.steps.length-1;
+        if(step.type==='elixir'){
+          const wait=state.elixirRemaining||0;
+          if(wait>0.000001){E.advance(state,wait);elixirWaited+=wait;s.elixirWaits++;s.elixirWaited+=wait;}
+          E.elixir(state);continue;
+        }
         if(step.type==='revive'){
           const wait=state.reviveRemaining||0;
           // Revive pulável acima do limite: o resto do combo não roda nesta volta.
           if(step.skip&&wait>limit){cut=true;break;}
           // Revive em cooldown: espera liberar e anota o tempo perdido.
           if(wait>0.000001){E.advance(state,wait);waited+=wait;s.waits++;s.waited+=wait;}
-          E.revive(state,step.cooldown);revives++;continue;
+          E.revive(state,step.cooldown);revives++;
+          if(lastStep)pullNext();
+          E.advance(state,c.delay);continue;
         }
         const p=team.indexOf(step.pokemon);
         if(state.active!==p)E.swap(state,p);
         E.advance(state,step.move.remaining);
         E.cast(state,p,step.moveIndex,random,step.elixir);casts++;
+        // A troca ocorre no instante da conclusão, antes do intervalo final, como na box ao vivo.
+        if(lastStep||state.box.finishedAt!==null)pullNext();
         E.advance(state,c.delay);
         if(state.box.finishedAt!==null)break;
       }
       // Pokémon para o próximo lure: sai da ball ao fim do combo, antes das targets, mesmo se o revive foi pulado.
-      if(c.pullNext)E.swap(state,combos[i+1<combos.length?i+1:0].first);
+      pullNext();
       if(cut&&!casts){
-        // Nenhum golpe usado: o combo foi pulado inteiro, não conta box nem gasta tempo.
-        s.skipped++;log.push({slot:c.slot,skipped:true,survivors:0,hpLeft:0,revives:0,waited:0,time:0,reviveStart,reviveEnd:reviveStart});
+        // Nenhum golpe usado: não conta box; mantém eventual tempo já gasto esperando itens.
+        s.skipped++;log.push({slot:c.slot,skipped:true,survivors:0,hpLeft:0,revives,waited,elixirWaited,time:state.elapsed-start,reviveStart,reviveEnd:state.reviveRemaining||0});
         // Volta inteira pulada sem o tempo andar: espera o revive caber no limite para não girar em falso.
-        if(++idle>=combos.length){E.advance(state,Math.max(state.reviveRemaining-limit,0.001));idle=0;}
+        if(state.elapsed>start)idle=0;
+        else if(++idle>=combos.length){E.advance(state,Math.max(state.reviveRemaining-limit,0.001));idle=0;}
         continue;
       }
       idle=0;if(cut)s.cut++;
       const alive=state.box.targets.filter(t=>t.hp>0);
-      const entry={slot:c.slot,cut,survivors:alive.length,hpLeft:alive.reduce((sum,t)=>sum+t.hp,0),revives,waited,reviveStart};
+      const entry={slot:c.slot,cut,survivors:alive.length,hpLeft:alive.reduce((sum,t)=>sum+t.hp,0),revives,waited,elixirWaited,reviveStart};
       if(alive.length){
         s.failures++;s.survivors+=alive.length;s.hpLeft+=entry.hpLeft;
         // Uma target finaliza cada sobrevivente. O intervalo após a última skill do combo
@@ -71,6 +86,7 @@
     const combosOut=hours[0].stats.map((_,i)=>{
       const all=hours.map(h=>h.stats[i]),sum=k=>all.reduce((t,s)=>t+s[k],0);
       return {combo:all[0].slot+1,runs:sum('runs'),failures:sum('failures'),failuresPerHour:sum('failures')/runs,waitsPerHour:sum('waits')/runs,avgWait:sum('waits')?sum('waited')/sum('waits'):0,
+        elixirWaitsPerHour:sum('elixirWaits')/runs,avgElixirWait:sum('elixirWaits')?sum('elixirWaited')/sum('elixirWaits'):0,
         skippedPerHour:sum('skipped')/runs,cutPerHour:sum('cut')/runs,
         avgTime:sum('runs')?sum('time')/sum('runs'):0,avgSurvivors:sum('failures')?sum('survivors')/sum('failures'):0,
         avgHpLeft:sum('survivors')?sum('hpLeft')/sum('survivors'):0};
@@ -85,6 +101,7 @@
       const all=logs.map(l=>l[i]),ran=all.filter(b=>!b.skipped),sum=f=>ran.reduce((t,b)=>t+f(b),0),failures=ran.filter(b=>b.survivors).length,waits=ran.filter(b=>b.waited).length,survivors=sum(b=>b.survivors);
       return {lap:Math.floor(i/perLap)+1,combo:first.slot+1,runs,ran:ran.length,skipped:runs-ran.length,cut:ran.filter(b=>b.cut).length,failures,
         avgSurvivors:failures?survivors/failures:0,avgHpLeft:survivors?sum(b=>b.hpLeft)/survivors:0,avgTime:ran.length?sum(b=>b.time)/ran.length:0,
+        elixirWaits:ran.filter(b=>b.elixirWaited).length,avgElixirWait:ran.filter(b=>b.elixirWaited).length?sum(b=>b.elixirWaited)/ran.filter(b=>b.elixirWaited).length:0,
         reviveUsed:ran.filter(b=>b.revives).length,reviveWaits:waits,avgWait:waits?sum(b=>b.waited)/waits:0,
         avgReviveStart:all.reduce((t,b)=>t+b.reviveStart,0)/runs,avgReviveEnd:all.reduce((t,b)=>t+b.reviveEnd,0)/runs};
     });
@@ -103,6 +120,7 @@
       out.textContent=[`${r.boxes} boxes completas em 1h = ${r.boxes*MOBS} mobs (mediana de ${r.runs} horas${range})`,
         ...r.combos.map(c=>`Combo ${c.combo}: `+[c.runs?`${n(c.avgTime,1)}s por box`:'', !c.runs?'':c.failures?`precisou de target ${n(c.failuresPerHour,1)}x/h (${c.failures}/${c.runs}) · ${leftover(c)}`:'fechou todas as boxes',
           c.waitsPerHour?`esperou o revive ${n(c.waitsPerHour,1)}x/h (${span(c.avgWait)} em média)`:'',
+          c.elixirWaitsPerHour?`esperou o elixir ${n(c.elixirWaitsPerHour,1)}x/h (${span(c.avgElixirWait)} em média)`:'',
           c.skippedPerHour?`pulado ${n(c.skippedPerHour,1)}x/h (revive em cooldown)`:'',
           c.cutPerHour?`resto pulado no revive ${n(c.cutPerHour,1)}x/h`:''].filter(Boolean).join(' · ')),
         'Tempo entre boxes desconsiderado; o intervalo de cada combo conta como tempo de reação. Finalização incluída: 1 skill target por mob restante, com o mesmo intervalo do combo.'].join('\n');
@@ -119,6 +137,7 @@
         `${n(c.avgTime,1)}s`,
         `revive ${clock(c.avgReviveStart)} → ${clock(c.avgReviveEnd)}`,
         c.reviveWaits?`esperou ${span(c.avgWait)} pelo revive${share(c.reviveWaits,c.ran)}`:'',
+        c.elixirWaits?`esperou ${span(c.avgElixirWait)} pelo elixir${share(c.elixirWaits,c.ran)}`:'',
         c.cut?`resto pulado no revive${share(c.cut,c.ran)}`:'',
         c.skipped?`pulado em ${c.skipped}/${c.runs}`:''].filter(Boolean).join(' · ');
       const blocks=[...new Set(rows.map(c=>c.lap))].map(lap=>[`Volta ${lap}`,...rows.filter(c=>c.lap===lap).map(line)].join('\n'));

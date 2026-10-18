@@ -65,39 +65,39 @@ for(const [cooldown,expected] of [[3593.5,2],[3594,2],[3594.5,1]]){
 // Revive: 5 min por padrão, 4 min com "revive 4"; um cooldown só para os dois.
 const half=[poke('A',DUMMY_HP/2)];
 assert.deepEqual(parseSequence('poke 1 cd 1\nrevive\nrevive 4',half).slice(1).map(s=>s.cooldown),[300,240]);
-// Volta 1: golpe, revive e golpe fecham a box em t=1. Volta 2: o golpe volta em t=11 e o revive, usado em t=1, ainda tem 229s em t=12; o combo espera e fecha em t=241.
+// Volta 1: golpe em t=0, revive em t=1 e golpe em t=2. Volta 2: golpe em t=12, espera pelo revive de t=13 a t=241 e golpe em t=242.
 const laps=simulateLaps({team:half,combos:[{sequence:'poke 1 cd 1\nrevive 4\npoke 1 cd 1',delay:1}],runs:1,random:()=>1});
 assert.deepEqual(laps.map(l=>[l.lap,l.failures,l.reviveUsed,l.reviveWaits]),[[1,0,1,0],[2,0,1,1]]);
-close(laps[1].avgWait,229);
-// Cooldown do revive no início e no fim de cada box; cada box termina 1s depois de usar o revive.
-assert.deepEqual(laps.map(l=>[l.avgReviveStart,l.avgReviveEnd]),[[0,239],[239,239]]);
+close(laps[1].avgWait,228);
+// Cooldown do revive no início e no fim de cada box; o golpe seguinte usa um intervalo e o pós-golpe usa outro.
+assert.deepEqual(laps.map(l=>[l.avgReviveStart,l.avgReviveEnd]),[[0,238],[238,238]]);
 // Revive pulável ("revive 4 pular") com limite padrão de 5s.
 const kill=[poke('A',DUMMY_HP)],extra=[{sequence:'poke 1 cd 1',delay:1},{sequence:'revive 4 pular\npoke 1 cd 1',delay:1}];
 assert.equal(parseSequence('revive 4 pular\npoke 1 cd 1',kill)[0].skip,true);
-// Box nova: na volta 2 o revive ainda tem 229s, então o combo 2 é pulado inteiro e não conta box.
+// Box nova: na volta 2 o revive ainda tem 228s, então o combo 2 é pulado inteiro e não conta box.
 let rows=simulateLaps({team:kill,combos:extra,runs:1,random:()=>1});
 assert.deepEqual(rows.map(l=>[l.lap,l.combo,l.skipped]),[[1,1,0],[1,2,0],[2,1,0],[2,2,1]]);
-close(rows[3].avgReviveStart,229);
+close(rows[3].avgReviveStart,228);
 // Com limite alto o mesmo combo espera o revive em vez de pular.
 rows=simulateLaps({team:kill,combos:extra,reviveWait:300,runs:1,random:()=>1});
 assert.deepEqual([rows[3].skipped,rows[3].reviveWaits],[0,1]);
-close(rows[3].avgWait,229);
+close(rows[3].avgWait,228);
 // Mesma box: com golpe já usado, a box conta e os seis mobs vão para as targets.
 rows=simulateLaps({team:half,combos:[{sequence:'poke 1 cd 1\nrevive 4 pular\npoke 1 cd 1',delay:1}],runs:1,random:()=>1});
 assert.deepEqual([rows[1].skipped,rows[1].cut,rows[1].failures,rows[1].avgSurvivors],[0,1,1,6]);
-// Só combos puláveis: o relógio avança até o revive caber no limite. Boxes em t=0, 240 e 480.
+// Só combos puláveis: o relógio avança até o revive caber no limite. Boxes em t=1, 241 e 481.
 r=simulateHour({team:kill,combos:[extra[1]],seconds:600,runs:1,random:()=>1});
 assert.equal(r.boxes,3);
 // Pokémon para o próximo lure, disco 0 (na ball o cooldown não anda). Tempos por box de duas voltas.
 const duo=[poke('A',DUMMY_HP/2),poke('B',DUMMY_HP)],times=combos=>simulateLaps({team:duo,combos,runs:1,random:()=>1}).map(l=>l.avgTime);
 const pair=pullNext=>[{sequence:'poke 1 cd 1',delay:1,pullNext},{sequence:'poke 2 cd 1',delay:1}];
 assert.deepEqual(times(pair(false)),[7,1,10,10]);
-// Com a opção, B sai da ball antes das seis targets do combo 1 e recupera 6s; A fica parado na ball e atrasa o combo 1.
-assert.deepEqual(times(pair(true)),[7,1,16,4]);
+// Com a opção, B sai da ball antes das seis targets do combo 1 e recupera 7s; A fica parado na ball e atrasa o combo 1.
+assert.deepEqual(times(pair(true)),[7,1,17,3]);
 // O resto pulado no revive também puxa o Pokémon do próximo combo antes das targets.
 const cutCombo=pullNext=>[{sequence:'poke 1 cd 1\nrevive 4 pular\npoke 1 cd 1',delay:1,pullNext},{sequence:'poke 2 cd 1',delay:1}];
-assert.deepEqual(times(cutCombo(false)),[2,1,16,10]);
-assert.deepEqual(times(cutCombo(true)),[2,1,16,4]);
+assert.deepEqual(times(cutCombo(false)),[3,1,16,10]);
+assert.deepEqual(times(cutCombo(true)),[3,1,17,4]);
 // Combos por nome: acha o Pokémon sem diferenciar acentos nem maiúsculas; "poke N" antigo vale pela posição, depois do nome.
 const named=[poke('Zoroark',1),poke('Pokémon 2',1)];
 assert.equal(parseSequence('zoroark cd 1\npokemon 2 cd 1\npoke 2 cd 1',named).map(s=>s.pokemon.name).join(),'Zoroark,Pokémon 2,Pokémon 2');

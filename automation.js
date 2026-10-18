@@ -26,6 +26,7 @@
         if(pendingElixir!==null)throw Error(`Linha ${i+1}: o elixir anterior precisa de uma linha de Pokémon.`);
         pendingElixir=elixir[1]===undefined?70:Number(elixir[1].replace(',','.'));
         if(!Number.isFinite(pendingElixir)||pendingElixir>10000)throw Error('Elixir deve estar entre 0 e 10000%.');
+        steps.push({type:'elixir',bonus:pendingElixir});
         return;
       }
       const revive=clean.match(/^\s*revive(?:\s+([45])\s*(?:min)?)?(\s+pular)?\s*$/i);
@@ -90,6 +91,11 @@
     if(sim.isPaused()){message('Simulação pausada. Continue a simulação para executar a sequência.');return;}
     if(sim.state.elapsed<run.nextAt)return;
     const step=run.steps[run.index];
+    if(step.type==='elixir'){
+      if(!root.CooldownEngine.elixir(sim.state)){message('Aguardando elixir ('+Math.ceil(sim.state.elixirRemaining)+'s).');return;}
+      // O item não acrescenta um intervalo de golpe; o bônus vale para a etapa seguinte.
+      run.index++;tick();return;
+    }
     if(step.type==='revive'){
       const pokemon=sim.state.team[sim.state.active];
       if(step.skip&&sim.state.reviveRemaining>reviveWait()){finish(`${run.casts?'Resto do combo pulado':'Combo pulado'}: revive em cooldown (faltam ${Math.ceil(sim.state.reviveRemaining)}s).`);return;}
@@ -120,9 +126,13 @@
   // Modo de caçar: nome, combos e os nomes dos Pokémon do time. "combos" é sempre a lista do modo ativo.
   let modes=[{name:'Modo 1',combos:Array(DEFAULT_COMBOS).fill(null)}],mode=0,combos=modes[0].combos,current=0;
   function comboMessage(text){$('combo-status').textContent=text;}
+  function runnable(c){
+    if(!c)return false;
+    try{parseSequence(c.sequence,sim.state.team);return true;}catch{return false;}
+  }
   function renderCombos(){
     $('combo-tabs').innerHTML=combos.map((c,i)=>'<button type="button" role="tab" data-tab="'+i+'" aria-selected="'+(i===current)+'"'+(!c?' class="empty"':'')+'>Combo '+(i+1)+'</button>').join('')+(combos.length<MAX_COMBOS?'<button type="button" data-add aria-label="Adicionar combo" title="Adicionar combo">+</button>':'');
-    $('combo-list').innerHTML=combos.map((c,i)=>'<div class="combo-row"><button data-combo="'+i+'" data-action="run" '+(!c?'disabled':'')+'>▶ Combo '+(i+1)+'</button><button class="quiet" data-combo="'+i+'" data-action="load">Editar</button></div>').join('');
+    $('combo-list').innerHTML=combos.map((c,i)=>'<div class="combo-row"><button data-combo="'+i+'" data-action="run" '+(!runnable(c)?'disabled':'')+'>▶ Combo '+(i+1)+'</button><button class="quiet" data-combo="'+i+'" data-action="load">Editar</button></div>').join('');
     $('combo-remove').disabled=combos.length<=1;
   }
   // A aba escolhida é o combo em edição: os campos da tela sempre mostram combos[current].
@@ -134,15 +144,15 @@
   }
   function autosave(){
     const sequence=$('auto-sequence').value,delay=Number($('auto-delay').value);
+    const validDelay=Number.isFinite(delay)&&delay>=0.1&&delay<=60;
+    // Uma etapa incompleta também precisa ser preservada como rascunho.
+    combos[current]=sequence.trim()?{sequence:namedSequence(sequence,sim.state.team),delay:validDelay?delay:(combos[current]?.delay||0.5),repeat:$('auto-repeat').checked,pullNext:$('combo-pull').checked}:null;
+    renderCombos();
     try{
-      if(!sequence.trim())combos[current]=null;
-      else{
-        parseSequence(sequence,sim.state.team);
-        if(!Number.isFinite(delay)||delay<0.1||delay>60)throw Error('Use um intervalo entre 0,1 e 60 segundos.');
-        combos[current]={sequence:namedSequence(sequence,sim.state.team),delay,repeat:$('auto-repeat').checked,pullNext:$('combo-pull').checked};
-      }
-      renderCombos();message('Combo '+(current+1)+(combos[current]?' atualizado.':' vazio.'));
-    }catch(e){message('Combo '+(current+1)+' não atualizado: '+e.message);}
+      if(sequence.trim())parseSequence(sequence,sim.state.team);
+      if(!validDelay)throw Error('Use um intervalo entre 0,1 e 60 segundos.');
+      message('Combo '+(current+1)+(combos[current]?' atualizado.':' vazio.'));
+    }catch(e){message('Rascunho do Combo '+(current+1)+' guardado. Para executar: '+e.message);}
   }
   ['auto-sequence','auto-delay'].forEach(id=>$(id).addEventListener('input',autosave));
   ['auto-repeat','combo-pull'].forEach(id=>$(id).addEventListener('change',autosave));
@@ -248,12 +258,13 @@
   renderModes();selectCombo(0);
 
   root.pokeCombos={snapshot:()=>JSON.parse(JSON.stringify(combos)),
-    modes(){const copy=JSON.parse(JSON.stringify(modes));copy[mode].team=sim.state.team.map(p=>p.name);return {modes:copy,mode};},
-    restore(items,active=0){
+    modes(){const copy=JSON.parse(JSON.stringify(modes));copy[mode].team=sim.state.team.map(p=>p.name);return {modes:copy,mode,combo:current};},
+    canonical:namedSequence,
+    restore(items,active=0,selected=0){
       modes=JSON.parse(JSON.stringify(items));mode=Math.min(active,modes.length-1);combos=modes[mode].combos;
       // Combos antigos apontavam para a posição no time; passam a guardar o nome.
       for(const c of combos)if(c)c.sequence=namedSequence(c.sequence,sim.state.team);
-      renderModes();selectCombo(Math.min(current,combos.length-1));
+      renderModes();selectCombo(Math.min(selected,combos.length-1));
     },stop:()=>stop('Sequência parada.'),reviveWait,setReviveWait(value){$('revive-wait').value=value;}};
   controls();setInterval(tick,100);
 })(globalThis);
