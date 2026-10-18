@@ -30,6 +30,8 @@
   }
   function updateBox() {
     const box=state.box, dead=box.targets.filter(t=>t.hp===0).length;
+    const itemTime=seconds=>{const n=Math.ceil(seconds||0);return n?Math.floor(n/60)+':'+String(n%60).padStart(2,'0'):'pronto';};
+    document.getElementById('items-status').textContent='Revive: '+itemTime(state.reviveRemaining)+' · Elixir: '+itemTime(state.elixirRemaining);
     document.getElementById('box-center').textContent=state.team[state.active].name;
     document.getElementById('box-count').textContent=`${dead}/8 derrotados`;
     box.targets.forEach(t=>{
@@ -112,7 +114,7 @@
   document.getElementById('global-crit').addEventListener('input',event=>{sync();state.globalCrit=E.percent(event.target.value);if(Number(event.target.value)<0||Number(event.target.value)>100)event.target.value=state.globalCrit;update();});
   document.getElementById('global-atk').addEventListener('input',event=>{sync();state.globalAtk=Math.min(10000,Math.max(0,Number(event.target.value)||0));if(Number(event.target.value)<0||Number(event.target.value)>10000)event.target.value=state.globalAtk;update();});
   document.getElementById('new-box').onclick=()=>{sync();state.box=E.newBox();update();say('Nova box. Cooldowns mantidos.');};
-  document.getElementById('restart-box').onclick=()=>{sync();paused=true;state.elapsed=0;state.box=E.newBox();state.team.forEach(p=>p.focusReady=false);state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Box e cooldowns reiniciados.');};
+  document.getElementById('restart-box').onclick=()=>{sync();paused=true;state.elapsed=0;state.reviveRemaining=0;state.elixirRemaining=0;state.box=E.newBox();state.team.forEach(p=>p.focusReady=false);state.team.forEach(p=>p.moves.forEach(m=>{m.remaining=0;m.total=0;}));update();say('Box e cooldowns reiniciados.');};
   document.getElementById('add').onclick=()=>{if(state.team.length>=12)return;sync();state.team.push(makePokemon(`Pokémon ${state.team.length+1}`));render();const card=team.lastElementChild;card.querySelector('details').open=true;card.querySelector('[data-field=name]').focus();};
   const boxGrid=document.getElementById('box-grid');
   let dummyId=0;
@@ -147,7 +149,7 @@
   }
   function restoreCards(data){
     validateCards(data);
-    paused=true;state.elapsed=0;last=performance.now();
+    paused=true;state.elapsed=0;state.reviveRemaining=0;state.elixirRemaining=0;last=performance.now();
     state.team=data.team.map(simplifyHeldSettings).map(p=>({...p,focusReady:false,atk:p.atk||0,heldMode:'percent',moves:p.moves.map(m=>({...m,remaining:0,total:0}))}));
     state.active=Number.isInteger(data.active)&&data.active>=0&&data.active<state.team.length?data.active:0;
     state.disk=data.disk;state.globalCrit=data.globalCrit;state.globalAtk=data.globalAtk||0;

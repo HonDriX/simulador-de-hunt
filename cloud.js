@@ -32,20 +32,48 @@ function preserveCurrent(){
 const tell=text=>{$('account-status').textContent=text;};
 const importStatus=text=>{tell(text);$('cards-status').textContent=text;};
 function controls(){for(const id of ['cloud-save','cloud-load','cloud-import','cloud-export','import-cards'])$(id).disabled=busy||!ready;}
-function snapshot(){return {version:1,cards:pokeCards.snapshot(),library:pokeCards.library(),combos:pokeCombos.snapshot(),automation:{sequence:$('auto-sequence').value,delay:Number($('auto-delay').value),repeat:$('auto-repeat').checked}};}
+function snapshot(){
+  const current=pokeCombos.snapshot();
+  // Campo legado: seis slots para o banco e leitores antigos. modes preserva todos os combos.
+  const combos=Array.from({length:6},(_,i)=>current[i]??null);
+  const delay=Number($('auto-delay').value);
+  return {version:1,cards:pokeCards.snapshot(),library:pokeCards.library(),combos,...pokeCombos.modes(),reviveWait:pokeCombos.reviveWait(),
+    automation:{sequence:$('auto-sequence').value,delay:Number.isFinite(delay)&&delay>=0.1&&delay<=60?delay:0.5,repeat:$('auto-repeat').checked}};
+}
 function normalize(data){
   if(!data||typeof data!=='object'||Array.isArray(data))throw Error('Backup inválido.');
   const p=data.cards?data:{version:1,cards:data,library:data.team||[],combos:Array(6).fill(null),automation:data.automation||{sequence:'poke 1 cds 1 a 6',delay:0.5,repeat:false}};
   try{pokeCards.validate(p.cards);}catch(e){throw Error('Time: '+e.message);}
   try{pokeCards.validateLibrary(p.library);}catch(e){throw Error('Biblioteca: '+e.message);}
-  const validSequence=c=>c&&typeof c.sequence==='string'&&c.sequence.length<=20000&&Number.isFinite(c.delay)&&c.delay>=0.1&&c.delay<=60&&typeof c.repeat==='boolean';
-  if(!Array.isArray(p.combos)||p.combos.length!==6||p.combos.some(c=>c!==null&&!validSequence(c))||!validSequence(p.automation))throw Error('Combos ou sequência inválidos.');
+  const validSequence=c=>c&&typeof c.sequence==='string'&&c.sequence.length<=20000&&Number.isFinite(c.delay)&&c.delay>=0.1&&c.delay<=60&&typeof c.repeat==='boolean'&&(c.skip===undefined||typeof c.skip==='boolean')&&(c.pullNext===undefined||typeof c.pullNext==='boolean');
+  const validCombos=list=>Array.isArray(list)&&list.length>=1&&list.length<=20&&list.every(c=>c===null||validSequence(c));
+  if(!validCombos(p.combos)||!validSequence(p.automation))throw Error('Combos ou sequência inválidos.');
+  // Backup anterior aos modos de caçar: vira um modo único com os combos dele.
+  if(p.modes===undefined){
+    const combos=JSON.parse(JSON.stringify(p.combos)),draft=p.automation;
+    const canonical=c=>pokeCombos.canonical(c.sequence,p.cards.team).trim();
+    const existing=combos.findIndex(c=>c&&canonical(c)===canonical(draft)&&c.delay===draft.delay&&c.repeat===draft.repeat);
+    let selected=existing;
+    if(draft.sequence.trim()&&existing<0){
+      selected=combos.indexOf(null);
+      if(selected<0)selected=combos.length;
+      if(selected>=20){p.modes=[{name:'Modo 1',combos},{name:'Sequência recuperada',combos:[{...draft}]}];p.mode=1;p.combo=0;}
+      else{combos[selected]={...draft};p.combo=selected;}
+    }else p.combo=Math.max(0,selected);
+    if(!p.modes){p.modes=[{name:'Modo 1',combos}];p.mode=0;}
+  }
+  const validTeam=team=>team===undefined||Array.isArray(team)&&team.length<=12&&team.every(name=>typeof name==='string'&&name.length<=35);
+  if(!Array.isArray(p.modes)||p.modes.length<1||p.modes.length>30||!Number.isInteger(p.mode)||p.mode<0||p.mode>=p.modes.length||p.modes.some(m=>!m||typeof m.name!=='string'||!m.name||m.name.length>40||!validCombos(m.combos)||!validTeam(m.team)))throw Error('Modos de caçar inválidos.');
+  if(p.combo===undefined)p.combo=0;
+  if(!Number.isInteger(p.combo)||p.combo<0||p.combo>=p.modes[p.mode].combos.length)throw Error('Combo selecionado inválido.');
+  if(p.reviveWait===undefined)p.reviveWait=5;
+  if(!Number.isFinite(p.reviveWait)||p.reviveWait<0||p.reviveWait>300)throw Error('Limite de espera do revive inválido.');
   if(new TextEncoder().encode(JSON.stringify(p)).length>900000)throw Error('Backup muito grande.');
   p.cards.globalAtk=p.cards.globalAtk||0;
   return p;
 }
-function apply(p){normalize(p);pokeCombos.stop();pokeCards.restore(p.cards,p.library);pokeCombos.restore(p.combos);$('auto-sequence').value=p.automation.sequence;$('auto-delay').value=p.automation.delay;$('auto-repeat').checked=p.automation.repeat;}
-function clear(){pokeCombos.stop();pokeCards.reset();pokeCombos.restore(Array(6).fill(null));$('auto-sequence').value='poke 1 cds 1 a 6';$('auto-delay').value=0.5;$('auto-repeat').checked=false;}
+function apply(p){normalize(p);pokeCombos.stop();pokeCards.restore(p.cards,p.library);pokeCombos.restore(p.modes,p.mode,p.combo);pokeCombos.setReviveWait(p.reviveWait);}
+function clear(){pokeCombos.stop();pokeCards.reset();pokeCombos.restore([{name:'Modo 1',combos:Array(6).fill(null)}],0);pokeCombos.setReviveWait(5);}
 async function load(migrateLocal=false){
   if(guest){const raw=localStorage.getItem(localKey);if(raw){apply(normalize(JSON.parse(raw)));lastLocal=JSON.stringify(snapshot());tell('Backup local carregado.');}else tell('Ainda não há backup neste navegador.');return;}
   if(ready)persistAccountDraft();
